@@ -59,6 +59,97 @@ for path in "$VERL_DIR" "$AGENTIC_ROOT/src" "$TRAIN_FILE" "$TEST_FILE" "$CORPUS"
   fi
 done
 
+eval "$("$VERL_PYTHON" - "$TRAIN_FILE" <<'PY'
+import math
+import os
+import shlex
+import sys
+
+train_file = sys.argv[1]
+
+try:
+    import pyarrow.parquet as pq
+
+    num_rows = pq.ParquetFile(train_file).metadata.num_rows
+except Exception:
+    import pandas as pd
+
+    num_rows = len(pd.read_parquet(train_file))
+
+train_batch_size = int(os.environ.get("GRPO_TRAIN_BATCH_SIZE", "1"))
+requested_steps = int(os.environ.get("GRPO_TOTAL_STEPS", "16"))
+save_freq = int(os.environ.get("GRPO_SAVE_FREQ", "0"))
+final_save_freq = save_freq
+epochs_was_set = "GRPO_TOTAL_EPOCHS" in os.environ
+total_epochs = int(os.environ.get("GRPO_TOTAL_EPOCHS", "1"))
+
+if train_batch_size <= 0:
+    raise SystemExit("GRPO_TRAIN_BATCH_SIZE must be positive")
+if requested_steps <= 0:
+    raise SystemExit("GRPO_TOTAL_STEPS must be positive")
+
+steps_per_epoch = math.ceil(num_rows / train_batch_size)
+if steps_per_epoch <= 0:
+    raise SystemExit(f"empty train dataset: {train_file}")
+
+possible_steps = steps_per_epoch * total_epochs
+if requested_steps > possible_steps and not epochs_was_set:
+    total_epochs = math.ceil(requested_steps / steps_per_epoch)
+    possible_steps = steps_per_epoch * total_epochs
+    print(
+        "echo "
+        + shlex.quote(
+            "GRPO_TOTAL_EPOCHS was unset; expanded to "
+            f"{total_epochs} so GRPO_TOTAL_STEPS={requested_steps} is reachable "
+            f"with {num_rows} rows and train_batch_size={train_batch_size}."
+        )
+        + " >&2"
+    )
+
+effective_steps = min(requested_steps, possible_steps)
+if requested_steps > possible_steps:
+    print(
+        "echo "
+        + shlex.quote(
+            "GRPO_TOTAL_STEPS exceeds configured dataloader capacity; "
+            f"effective_steps={effective_steps}, requested_steps={requested_steps}, "
+            f"steps_per_epoch={steps_per_epoch}, total_epochs={total_epochs}."
+        )
+        + " >&2"
+    )
+    print(f"export GRPO_TOTAL_STEPS={effective_steps}")
+
+if save_freq > 0 and (save_freq > effective_steps or effective_steps % save_freq != 0):
+    print(
+        "echo "
+        + shlex.quote(
+            "Adjusting GRPO_SAVE_FREQ to guarantee a final checkpoint: "
+            f"{save_freq} -> {effective_steps}."
+        )
+        + " >&2"
+    )
+    print(f"export GRPO_SAVE_FREQ={effective_steps}")
+    final_save_freq = effective_steps
+
+print(f"export GRPO_TOTAL_EPOCHS={total_epochs}")
+print(f"export GRPO_EFFECTIVE_STEPS={effective_steps}")
+print(
+    "echo "
+    + shlex.quote(
+        f"preflight rows={num_rows} steps_per_epoch={steps_per_epoch} "
+        f"total_epochs={total_epochs} effective_steps={effective_steps} "
+        f"save_freq={final_save_freq}"
+    )
+    + " >&2"
+)
+PY
+)"
+
+if [ "${GRPO_REQUIRE_FINAL_CHECKPOINT:-0}" = "1" ] && [ "${GRPO_SAVE_FREQ:-0}" -le 0 ]; then
+  echo "GRPO_REQUIRE_FINAL_CHECKPOINT=1 requires GRPO_SAVE_FREQ > 0" >&2
+  exit 1
+fi
+
 mkdir -p "$SAVE_PATH" "$ROLLOUT_DIR" "$REPO_ROOT/logs"
 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1}"
@@ -180,4 +271,33 @@ if [ "${DRY_RUN:-1}" != "0" ]; then
 fi
 
 cd "$VERL_DIR"
+set +e
 "${CMD[@]}" 2>&1 | tee "$LOG_FILE"
+cmd_status=${PIPESTATUS[0]}
+set -e
+
+if [ "$cmd_status" -ne 0 ]; then
+  exit "$cmd_status"
+fi
+
+if [ "${GRPO_REQUIRE_FINAL_CHECKPOINT:-0}" = "1" ]; then
+  TRACKER_FILE="$SAVE_PATH/latest_checkpointed_iteration.txt"
+  if [ ! -s "$TRACKER_FILE" ]; then
+    echo "Training exited without a checkpoint tracker: $TRACKER_FILE" >&2
+    exit 1
+  fi
+
+  LATEST_STEP="$(tr -d '[:space:]' < "$TRACKER_FILE")"
+  EXPECTED_STEP="${GRPO_EFFECTIVE_STEPS:-${GRPO_TOTAL_STEPS:-}}"
+  if [ -n "$EXPECTED_STEP" ] && [ "$LATEST_STEP" != "$EXPECTED_STEP" ]; then
+    echo "Final checkpoint step mismatch: expected $EXPECTED_STEP, got $LATEST_STEP" >&2
+    exit 1
+  fi
+
+  if [ ! -d "$SAVE_PATH/global_step_${LATEST_STEP}/actor" ]; then
+    echo "Final actor checkpoint missing: $SAVE_PATH/global_step_${LATEST_STEP}/actor" >&2
+    exit 1
+  fi
+
+  echo "Final checkpoint verified: $SAVE_PATH/global_step_${LATEST_STEP}/actor"
+fi

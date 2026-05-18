@@ -143,6 +143,7 @@ reports/dfc_mixclean200_v3_promptfix_onecite_2gpu_rollout_summary.md
 租 GPU 之前，先读：
 
 ```text
+docs/deepfactcite_grpo_processes_interview_20260519.md
 reports/deepfactcite_cpu_mode_consistency_check_20260518.md
 reports/storage_cleanup_candidates_current_20260518.md
 docs/deepfactcite_4gpu_saved_run_plan_20260518.md
@@ -150,6 +151,9 @@ docs/deepfactcite_4gpu_saved_run_plan_20260518.md
 
 它会讲清楚：
 
+- 当前 4 卡 GRPO/SGLang 训练进程分别在做什么；
+- Ray、FSDP、SGLang、AgentLoop 和 DeepFactCite reward 如何串起来；
+- 面试中如何通俗解释 GRPO 的组内相对优势；
 - v3 的 parquet/jsonl/rollout/report artifact 是否一致；
 - 迁移或保存 checkpoint 之前，哪些大目录可以清理；
 - 为什么只有 v3 之后才值得上 4 卡；
