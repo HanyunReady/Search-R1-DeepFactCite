@@ -144,6 +144,14 @@ reward_model:
   structure_format_score: 0
   final_format_score: 0
   retrieval_score: 0
+  deepfactcite_answer_weight: 0.25
+  deepfactcite_citation_weight: 0.35
+  deepfactcite_support_weight: 0.25
+  deepfactcite_format_weight: 0.10
+  deepfactcite_search_weight: 0.05
+  deepfactcite_cost_weight: 0.05
+  deepfactcite_max_searches: 4
+  deepfactcite_use_judge: False
 
 retriever:
   url: "http://127.0.0.1:8000/retrieve"

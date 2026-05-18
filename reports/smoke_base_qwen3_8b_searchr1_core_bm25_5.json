@@ -1,0 +1,36 @@
+{
+  "answer_exact": 0.0,
+  "answer_subem": 0.2,
+  "answer_presence": 0.4,
+  "search_success": 1.0,
+  "search_turns": 2.6,
+  "invalid_turns": 0.2,
+  "retrieved_docs": 7.8,
+  "empty_answer_rate": 0.6,
+  "budget_fail_rate": 0.4,
+  "no_action_rate": 0.0,
+  "response_tokens": 1557.2,
+  "by_source": {
+    "nq": {
+      "answer_exact": 0.0,
+      "answer_subem": 0.2,
+      "answer_presence": 0.4,
+      "search_success": 1.0,
+      "search_turns": 2.6,
+      "invalid_turns": 0.2,
+      "retrieved_docs": 7.8,
+      "empty_answer_rate": 0.6,
+      "budget_fail_rate": 0.4,
+      "no_action_rate": 0.0,
+      "response_tokens": 1557.2,
+      "rows": 5
+    }
+  },
+  "rows": 5,
+  "model": "base",
+  "data": "data/searchr1_core_guardrail/test.parquet",
+  "retriever_url": "http://127.0.0.1:8000/retrieve",
+  "no_search": false,
+  "topk": 3,
+  "max_turns": 4
+}

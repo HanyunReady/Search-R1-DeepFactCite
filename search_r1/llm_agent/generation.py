@@ -460,10 +460,21 @@ If I want to give the final answer, I should put the answer between <answer> and
     def _passages2string(self, retrieval_result):
         format_reference = ''
         for idx, doc_item in enumerate(retrieval_result):
-            
-            content = doc_item['document']['contents']
+            document = doc_item['document']
+            content = document['contents']
             title = content.split("\n")[0]
-            text = "\n".join(content.split("\n")[1:])
-            format_reference += f"Doc {idx+1}(Title: {title}) {text}\n"
+            body_lines = content.split("\n")[1:]
+            url = document.get("url") or document.get("source_url") or document.get("id") or f"doc://{idx+1}"
+            text_lines = []
+            for line in body_lines:
+                stripped = line.strip()
+                if stripped.lower().startswith("url:"):
+                    url = stripped.split(":", 1)[1].strip() or url
+                elif stripped.lower().startswith("text:"):
+                    text_lines.append(stripped.split(":", 1)[1].strip())
+                else:
+                    text_lines.append(line)
+            text = "\n".join(text_lines).strip()
+            format_reference += f"Doc {idx+1}(Title: {title})\nURL: {url}\nText: {text}\n"
 
         return format_reference

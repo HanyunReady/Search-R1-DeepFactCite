@@ -1,0 +1,16 @@
+{
+  "total": 0.1580757092198582,
+  "answer_subem": 0.0,
+  "citation_presence": 0.5319148936170213,
+  "url_validity": 0.46099290780141844,
+  "citation_precision": 0.09219858156028368,
+  "claim_support": 0.0879432624113475,
+  "unsupported_citation_rate": 0.8347517730496452,
+  "fake_url_rate": 0.07092198581560284,
+  "search_turns": 0.8936170212765957,
+  "response_tokens": 938.7021276595744,
+  "rows": 47,
+  "model": "soft",
+  "data": "data/deepfactcite_strict/sft/test.parquet",
+  "corpus": "data/deepfactcite_strict/corpus.jsonl"
+}

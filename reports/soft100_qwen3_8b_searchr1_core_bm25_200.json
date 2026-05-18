@@ -1,0 +1,50 @@
+{
+  "answer_exact": 0.06,
+  "answer_subem": 0.45,
+  "answer_presence": 0.925,
+  "search_success": 0.99,
+  "search_turns": 1.195,
+  "invalid_turns": 0.03,
+  "retrieved_docs": 3.585,
+  "empty_answer_rate": 0.075,
+  "budget_fail_rate": 0.045,
+  "no_action_rate": 0.01,
+  "response_tokens": 772.045,
+  "by_source": {
+    "hotpotqa": {
+      "answer_exact": 0.07,
+      "answer_subem": 0.41,
+      "answer_presence": 0.91,
+      "search_success": 0.98,
+      "search_turns": 1.27,
+      "invalid_turns": 0.04,
+      "retrieved_docs": 3.81,
+      "empty_answer_rate": 0.09,
+      "budget_fail_rate": 0.05,
+      "no_action_rate": 0.02,
+      "response_tokens": 821.97,
+      "rows": 100
+    },
+    "nq": {
+      "answer_exact": 0.05,
+      "answer_subem": 0.49,
+      "answer_presence": 0.94,
+      "search_success": 1.0,
+      "search_turns": 1.12,
+      "invalid_turns": 0.02,
+      "retrieved_docs": 3.36,
+      "empty_answer_rate": 0.06,
+      "budget_fail_rate": 0.04,
+      "no_action_rate": 0.0,
+      "response_tokens": 722.12,
+      "rows": 100
+    }
+  },
+  "rows": 200,
+  "model": "soft",
+  "data": "data/searchr1_core_guardrail/test.parquet",
+  "retriever_url": "http://127.0.0.1:8000/retrieve",
+  "no_search": false,
+  "topk": 3,
+  "max_turns": 4
+}

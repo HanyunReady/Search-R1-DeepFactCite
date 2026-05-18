@@ -173,9 +173,19 @@ class FSDPSFTTrainer(object):
             self.model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(local_model_path,
                                                                                config=config,
                                                                                torch_dtype=torch.float32,
-                                                                               attn_implementation='flash_attention_2',
+                                                                               attn_implementation=self.config.model.get('attn_implementation', 'flash_attention_2'),
                                                                                trust_remote_code=trust_remote_code)
             if self.config.model.get('lora_rank', 0) > 0:
+                # PEFT's torchao LoRA dispatcher is optional. Some local envs
+                # carry old torchao builds that PEFT rejects even for ordinary
+                # unquantized Linear layers, so disable that optional path.
+                try:
+                    import peft.import_utils as peft_import_utils
+                    import peft.tuners.lora.torchao as peft_lora_torchao
+                    peft_import_utils.is_torchao_available = lambda: False
+                    peft_lora_torchao.is_torchao_available = lambda: False
+                except Exception:
+                    pass
                 self.model.enable_input_require_grads()
                 # Convert config to regular Python types before creating PEFT model
                 lora_config = {
@@ -229,10 +239,12 @@ class FSDPSFTTrainer(object):
 
         steps_per_epoch = len(self.train_dataloader)
         total_steps = steps_per_epoch * self.config.trainer.total_epochs
+        if self.config.trainer.total_training_steps is not None:
+            total_steps = self.config.trainer.total_training_steps
 
         if self.device_mesh.get_rank() == 0:
             print(
-                f'Number of steps/epoch {steps_per_epoch}, number of epochs {self.config.trainer.total_epochs}, total number of steps {total_steps}'
+                f'Number of steps/epoch {steps_per_epoch}, number of epochs {self.config.trainer.total_epochs}, scheduler steps {total_steps}'
             )
 
         num_warmup_steps = int(total_steps * self.config.optim.warmup_steps_ratio)

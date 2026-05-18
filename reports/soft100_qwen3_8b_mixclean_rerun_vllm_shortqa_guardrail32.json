@@ -1,0 +1,16 @@
+{
+  "total": 0.3909067708333333,
+  "answer_subem": 0.4375,
+  "citation_presence": 0.8125,
+  "url_validity": 0.8125,
+  "citation_precision": 0.2916666666666667,
+  "claim_support": 0.2916666666666667,
+  "unsupported_citation_rate": 0.5572916666666667,
+  "fake_url_rate": 0.0,
+  "search_turns": 1.15625,
+  "response_tokens": 676.59375,
+  "rows": 32,
+  "model": "soft",
+  "data": "data/shortqa_guardrail/rl/test.parquet",
+  "corpus": "data/shortqa_guardrail/corpus.jsonl"
+}

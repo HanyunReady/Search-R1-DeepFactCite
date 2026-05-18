@@ -1,0 +1,17 @@
+{
+  "total": 0.06734583333333334,
+  "answer_subem": 0.0,
+  "citation_presence": 0.0,
+  "url_validity": 0.0,
+  "citation_precision": 0.0,
+  "claim_support": 0.0,
+  "unsupported_citation_rate": 1.0,
+  "fake_url_rate": 0.0,
+  "search_turns": 1.0,
+  "response_tokens": 1100.0,
+  "rows": 1,
+  "model": "/root/autodl-tmp/agentic-rl-searchqa/.cache/models/Qwen3-8B-Base",
+  "adapter": "outputs/deepfactcite/deepfactcite-sft-qwen3-8b-lora-strict-100/global_step_100",
+  "data": "data/deepfactcite_strict/sft/test.parquet",
+  "corpus": "data/deepfactcite_strict/corpus.jsonl"
+}
