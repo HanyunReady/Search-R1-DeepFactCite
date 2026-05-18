@@ -1,134 +1,126 @@
-# DeepFactCite Learning Index
+# DeepFactCite 学习索引
 
-Date: 2026-05-18
+日期：2026-05-18
 
-This is the recommended reading order for understanding the current
-DeepFactCite/Search-R1 experiment from scratch. Read the files in this order
-instead of jumping directly into scripts or raw logs.
+这是从零理解当前 DeepFactCite/Search-R1 实验的推荐阅读顺序。建议按这个顺序读文件，不要一开始就直接跳到脚本或原始日志。
 
-## 1. Main Story
+## 1. 主线故事
 
-Start here:
+从这里开始：
 
 ```text
 docs/deepfactcite_experiment_record_20260518.md
 ```
 
-What it teaches:
+它会讲清楚：
 
-- why the project exists;
-- what SFT and GRPO are doing in this repo;
-- why MixClean200 became the current SFT baseline;
-- why the first GRPO goal is not a long run, but a controlled comparison;
-- how v1, v2, parser-fix, and v3 prompt-fix changed the result.
+- 这个项目为什么存在；
+- 这个仓库里的 SFT 和 GRPO 分别在做什么；
+- 为什么 MixClean200 成为当前 SFT 基线；
+- 为什么第一阶段 GRPO 的目标不是长跑训练，而是受控对比；
+- v1、v2、parser-fix 和 v3 prompt-fix 分别如何改变结果。
 
-Beginner checkpoint:
+入门检查点：
 
 ```text
-If you can explain why "real URL" is not the same as "supported claim", you
-understand the core problem.
+如果你能解释为什么“真实 URL”不等于“被支持的声明”，你就理解了这个项目的核心问题。
 ```
 
-## 2. Failure Ledger
+## 2. 失败台账
 
-Read next:
+接着读：
 
 ```text
 docs/deepfactcite_reproducibility_issue_log.md
 ```
 
-What it teaches:
+它会讲清楚：
 
-- why completed training is not automatically a useful result;
-- how a bad checkpoint parent can poison later experiments;
-- why dynamic LoRA and merged checkpoints must be checked;
-- how to record failed attempts so they still create project value.
+- 为什么“训练跑完了”并不自动等于“结果有价值”；
+- 一个坏的父 checkpoint 如何污染后续实验；
+- 为什么 dynamic LoRA 和 merged checkpoint 必须做一致性检查；
+- 如何记录失败尝试，让失败本身也能沉淀项目价值。
 
-Beginner checkpoint:
+入门检查点：
 
 ```text
-If you can say why mix50 was not promoted even though it finished training, you
-understand reproducibility discipline.
+如果你能说清楚为什么 mix50 虽然完成训练却没有被提升为主模型，你就理解了复现纪律。
 ```
 
-## 3. SFT Baseline Reports
+## 3. SFT 基线报告
 
-Then read:
+然后读：
 
 ```text
 reports/deepfactcite_mixclean200_eval_summary.md
 reports/searchr1_core_bm25_eval_summary.md
 ```
 
-What they teach:
+它们会讲清楚：
 
-- how Base, Soft100, and MixClean200 compare;
-- why ShortQA32 and Search-R1 BM25 200 are guardrails;
-- why a citation project still needs answer/search metrics.
+- Base、Soft100 和 MixClean200 如何对比；
+- 为什么 ShortQA32 和 Search-R1 BM25 200 是防护评测；
+- 为什么一个引用质量项目仍然需要答案/搜索指标。
 
-Key result:
+关键结果：
 
 ```text
-MixClean200 is the current SFT baseline because it improves Search-R1 BM25 200
-subEM to 0.490 while preserving strong search behavior.
+MixClean200 是当前 SFT 基线，因为它把 Search-R1 BM25 200 的 subEM 提升到 0.490，同时保持了较强的搜索行为。
 ```
 
-## 4. GRPO Ablation Record
+## 4. GRPO 消融记录
 
-Read:
+阅读：
 
 ```text
 reports/deepfactcite_v2_onecite_grpo_ablation_2gpu_20260518.md
 ```
 
-What it teaches:
+它会讲清楚：
 
-- why claim-filtered data was needed;
-- why outcome-only and citation-aware must run on the same data;
-- why v2 was useful but not enough;
-- how the promotion gate for 4-card runs was derived.
+- 为什么需要 claim-filtered 数据；
+- 为什么 outcome-only 和 citation-aware 必须在同一份数据上运行；
+- 为什么 v2 有价值但还不够；
+- 4 卡训练的晋升门槛是如何推导出来的。
 
-Key result:
+关键结果：
 
 ```text
-Citation-aware reward improved URL validity, citation precision, claim support,
-and unsupported citation rate over outcome-only reward, but v2 still had too
-many no-citation failures.
+相较 outcome-only reward，citation-aware reward 改善了 URL validity、citation precision、claim support 和 unsupported citation rate，但 v2 仍然有太多 no-citation 失败。
 ```
 
-## 5. Rollout Gallery
+## 5. Rollout 样例集
 
-Then inspect:
+然后查看：
 
 ```text
 reports/deepfactcite_v3_promptfix_rollout_gallery_20260518.md
 reports/deepfactcite_v3_promptfix_rollout_gallery_samples_20260518.jsonl
 ```
 
-What it teaches:
+它会讲清楚：
 
-- how to read individual model trajectories;
-- what a fully supported answer looks like;
-- what a partially supported answer looks like;
-- why some outputs have a valid URL but still fail claim support;
-- why v3 is a real positive signal but not a final product checkpoint.
+- 如何阅读单条模型轨迹；
+- 完全被支持的答案是什么样；
+- 部分被支持的答案是什么样；
+- 为什么有些输出 URL 是有效的，却仍然在 claim support 上失败；
+- 为什么 v3 是一个真实的正向信号，但还不是最终产品级 checkpoint。
 
-Beginner checkpoint:
+入门检查点：
 
 ```text
-Pick one failure sample and explain which exact phrase in the answer is broader
-than the cited snippet. That is claim-level attribution debugging.
+选一个失败样例，解释答案里的哪一个具体短语比被引用片段表达得更宽。那就是声明级归因调试。
 ```
 
-## 6. Raw Metric Summary
+## 6. 原始指标摘要
 
-Use this as the compact result table:
+把这个文件当作紧凑结果表使用：
 
 ```text
 reports/dfc_mixclean200_v3_promptfix_onecite_2gpu_rollout_summary.md
 ```
 
-Important numbers:
+重要数字：
 
 | Metric | v3 Prompt-Fix |
 |---|---:|
@@ -140,16 +132,15 @@ Important numbers:
 | unsupported citation rate | 0.1250 |
 | no citation failures | 2/32 |
 
-How to use it:
+使用方式：
 
 ```text
-Use this file for headline metrics. Use the rollout gallery to understand why
-the metrics moved.
+用这个文件看核心指标；用 rollout gallery 理解指标为什么变化。
 ```
 
-## 7. Next-Run Plan
+## 7. 下一轮运行计划
 
-Before renting GPUs, read:
+租 GPU 之前，先读：
 
 ```text
 reports/deepfactcite_cpu_mode_consistency_check_20260518.md
@@ -157,18 +148,18 @@ reports/storage_cleanup_candidates_current_20260518.md
 docs/deepfactcite_4gpu_saved_run_plan_20260518.md
 ```
 
-What it teaches:
+它会讲清楚：
 
-- whether the v3 parquet/jsonl/rollout/report artifacts agree;
-- which large directories can be cleaned before migration or checkpoint saving;
-- why 4 cards are justified only after v3;
-- what command should be run;
-- what disk and checkpoint constraints matter;
-- what metrics must be checked before extending the run.
+- v3 的 parquet/jsonl/rollout/report artifact 是否一致；
+- 迁移或保存 checkpoint 之前，哪些大目录可以清理；
+- 为什么只有 v3 之后才值得上 4 卡；
+- 应该运行哪条命令；
+- 哪些磁盘和 checkpoint 约束很重要；
+- 扩展训练前必须检查哪些指标。
 
-## 8. Code Entry Points
+## 8. 代码入口
 
-Only after the docs above, read the code:
+读完上面的文档后，再读代码：
 
 ```text
 scripts/deepfactcite/prepare_sglang_grpo_claim_filtered.py
@@ -178,30 +169,29 @@ deepfactcite/reward.py
 scripts/deepfactcite/summarize_grpo_rollouts.py
 ```
 
-What each file does:
+每个文件的作用：
 
 | File | Role |
 |---|---|
-| `prepare_sglang_grpo_claim_filtered.py` | builds narrow claim-level GRPO data |
-| `run_sglang_grpo_ablation_2gpu.sh` | launches Search-R1/SGLang/GRPO with DeepFactCite reward |
-| `verl_deepfactcite_reward.py` | connects verl reward manager to project reward code |
-| `deepfactcite/reward.py` | parses answer/search/citation behavior and computes reward details |
-| `summarize_grpo_rollouts.py` | turns rollout JSONL into metric reports |
+| `prepare_sglang_grpo_claim_filtered.py` | 构建窄范围的声明级 GRPO 数据 |
+| `run_sglang_grpo_ablation_2gpu.sh` | 使用 DeepFactCite reward 启动 Search-R1/SGLang/GRPO |
+| `verl_deepfactcite_reward.py` | 把 verl reward manager 连接到项目 reward 代码 |
+| `deepfactcite/reward.py` | 解析答案/搜索/引用行为，并计算 reward 细项 |
+| `summarize_grpo_rollouts.py` | 把 rollout JSONL 转成指标报告 |
 
-## Mental Model
+## 心智模型
 
-The current workflow is:
+当前工作流是：
 
 ```text
-1. Build narrow claim-level data.
-2. Verify retriever can return the target URL.
-3. Run tiny GRPO ablations without checkpoint saving.
-4. Inspect rollout-level failures.
-5. Fix data/prompt/reward alignment.
-6. Only then run a saved medium checkpoint.
-7. Evaluate the checkpoint against answer/search and citation metrics.
-8. Record both wins and failures.
+1. 构建窄范围的声明级数据。
+2. 验证检索器能返回目标 URL。
+3. 在不保存 checkpoint 的情况下运行小型 GRPO 消融。
+4. 检查 rollout 级失败。
+5. 修正数据、prompt 和 reward 的对齐问题。
+6. 然后才运行一次保存 checkpoint 的中等规模训练。
+7. 用答案/搜索指标和引用指标一起评测 checkpoint。
+8. 同时记录成功和失败。
 ```
 
-The project is valuable because it treats citation quality as an engineering
-system, not a single reward number.
+这个项目的价值在于：它把引用质量当成一个工程系统来处理，而不是只看某一个 reward 数字。

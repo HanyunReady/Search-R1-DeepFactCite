@@ -1,51 +1,51 @@
 
-## 多节点训练
+## Multinode Training
 
-本代码库支持面向大规模语言模型的多节点训练。实现主要基于 [Ray](https://github.com/ray-project/ray)。
+Our codebase supports multi-node training for large-scale language models. The implementation is mainly based on [Ray](https://github.com/ray-project/ray).
 
-做 Ray 多节点训练时，节点分为两类：（1）head node；（2）worker nodes。
-head node 只有一个，你会在这个节点上启动 Ray 集群并提交训练任务。
-其他节点都是 worker nodes，只需要启动并注册到 Ray 集群即可。
+There are two types of nodes when doing Ray multi-node training: (1) head node and (2) worker nodes.
+There is only one head node where you will start the ray cluster and submit the job.
+The other nodes are worker nodes, where you only need to start and register to the ray cluster.
 
-### 步骤 1：搭建多节点 Ray 集群（来自 [link](https://verl.readthedocs.io/en/latest/start/multinode.html#set-up-multinode-ray-cluster)）
+### Step 1: Set up multinode ray cluster (from [link](https://verl.readthedocs.io/en/latest/start/multinode.html#set-up-multinode-ray-cluster))
 
-a. 使用 ```ray start --head --dashboard-host=0.0.0.0``` 启动 **head** 节点。这里有两个地址需要关注：
+a. Start **head** node with ```ray start --head --dashboard-host=0.0.0.0```, there’re 2 address you should care about:
 
-- GCS address：```ray start --address=<address>```，**worker** 节点需要连接到这个地址。
+- GCS address: ```ray start --address=<address>```, where **worker** node should connect to.
 
-- Dashboard address：```<address>:8265```，你需要向这个集群地址提交任务。
+- Dashboard address: ```<address>:8265```, where you should submit job to the cluster.
 
 ![head](../public/head.png)
 
-b. 启动 **worker node**，并使用上一步得到的 ```ray start --address=<address>``` 把它注册到 Ray 集群。
+b. Start **worker node** and register it to the ray cluster with ```ray start --address=<address>``` you get above.
 
 ![worker](../public/worker.png)
 
-c. 使用 ```ray status``` 检查集群状态。
+c. Check the cluster status with ```ray status```.
 
-例如，如果集群里有两个节点（每个节点 8 张 GPU），你应该能看到类似下面的状态：
+For example, if you have two nodes (each with 8 GPUs) in the cluster, you should see something like this:
 
 ![status](../public/status.png)
 
 
-### 步骤 2：在每个节点上启动检索服务器
+### Step 2: Launch the retrieval server on every node.
 
-为了让 RL 训练更稳定，建议在每个节点上都启动**相同**的检索服务器，包括 head node 和 worker nodes。如何启动不同检索器的详细信息见：[doc](https://github.com/PeterGriffinJin/Search-R1/blob/main/docs/retriever.md) 和 [scripts](https://github.com/PeterGriffinJin/Search-R1/tree/main/example/retriever)。
+We would recommend launch the **same** retrieval server on every nodes (including both head and worker nodes) for the stable RL training. Detailed information on how to launch different retrievers can be found as follows: [doc](https://github.com/PeterGriffinJin/Search-R1/blob/main/docs/retriever.md) and [scripts](https://github.com/PeterGriffinJin/Search-R1/tree/main/example/retriever).
 
-例如，如果你想启动使用 flat indexing 的本地稠密检索器，需要在**每个**节点上运行：
+For example, if you want to launch the local dense retriever with flat indexing, run the following command on **every** nodes:
 
 ```
 bash retrieval_launch.sh
 ```
 
 
-### 步骤 3：启动训练任务
+### Step 3: Start the job
 
-检索器启动后，就可以开始训练任务。训练任务只需要在 ***head*** 节点上启动。
+After the retrievers are launched, you can start the training job. You only need to start the job on the ***head*** node.
 
-下面是一个示例脚本。请把 ```RAY_DASHBOARD_ADDRESS``` 和 ```N_NODES``` 分别改成步骤 1 中找到的 dashboard 地址和节点数量。
+An example script is shown as below. Change ```RAY_DASHBOARD_ADDRESS``` and ```N_NODES``` to your dashboard address found in step 1 and the number of nodes respectively.
 
-更多脚本示例见 [here](https://github.com/PeterGriffinJin/Search-R1/tree/main/example/multinode)。
+More script examples can be found [here](https://github.com/PeterGriffinJin/Search-R1/tree/main/example/multinode).
 
 
 ```bash

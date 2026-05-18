@@ -1,18 +1,18 @@
-# DeepFactCite LoRA Merge and Eval Reproducibility Postmortem
+# DeepFactCite LoRA 合并与评测可复现性复盘
 
-Date: 2026-05-18
+日期：2026-05-18
 
-This document reconstructs the issue around `Soft SFT 100`, merged checkpoints, `mix50`, and inconsistent eval numbers. The purpose is to make the process auditable at an engineering-review level: what weights existed, how they were loaded, how they were merged, which serving path produced which number, what failed, and what we should do next.
+本文档复盘 `Soft SFT 100`、merged checkpoint、`mix50` 以及评测数字不一致的问题。目标是让整个过程达到工程评审可审计的程度：有哪些权重，它们如何加载，如何合并，哪个 serving path 产生了哪个数字，哪里失败了，以及下一步应该怎么做。
 
-## Executive Summary
+## 执行摘要
 
-The best reproducible SFT baseline is:
+当前最好的可复现 SFT baseline 是：
 
 ```text
 Base Qwen3-8B + Soft SFT LoRA adapter, served by vLLM as dynamic LoRA in bf16.
 ```
 
-It is reproducible under the current code path:
+它在当前代码路径下可复现：
 
 | Eval | Current rerun | Earlier aggregate |
 |---|---:|---:|
@@ -22,17 +22,17 @@ It is reproducible under the current code path:
 | Strict47 total | 0.156 | 0.158 |
 | Strict47 claim support | 0.103 | 0.088 |
 
-The problematic assumption was:
+有问题的假设是：
 
 ```text
 Base + Soft LoRA dynamic serving == merged Soft full model
 ```
 
-That assumption is not safe for this project. The old merged model was produced by loading the base model in bf16 and then merging a fp32 LoRA delta into bf16 weights. Direct HF logits checks showed this bf16 merge was not numerically equivalent to PEFT dynamic LoRA forward.
+这个假设对本项目并不安全。旧 merged model 是通过 bf16 加载 base model，然后把 fp32 LoRA delta 合并进 bf16 权重得到的。直接的 HF logits 检查显示，这个 bf16 merge 与 PEFT dynamic LoRA forward 在数值上不等价。
 
-The downstream `mix50` continuation was trained from that lossy bf16 merged parent, so it is not a valid continuation result and should not be used as a winner.
+下游 `mix50` continuation 是从这个有损 bf16 merged parent 继续训练的，所以它不是有效的 continuation 结果，也不应该被当成获胜模型。
 
-## Artifacts and Weight Locations
+## Artifact 与权重位置
 
 ### Base Model
 
@@ -40,7 +40,7 @@ The downstream `mix50` continuation was trained from that lossy bf16 merged pare
 /root/autodl-tmp/agentic-rl-searchqa/.cache/models/Qwen3-8B-Base
 ```
 
-This is the base Qwen3-8B checkpoint used by the soft LoRA adapter.
+这是 soft LoRA adapter 使用的 base Qwen3-8B checkpoint。
 
 ### Soft SFT 100 Adapter
 
@@ -48,7 +48,7 @@ This is the base Qwen3-8B checkpoint used by the soft LoRA adapter.
 outputs/deepfactcite/deepfactcite-sft-qwen3-8b-lora/global_step_100
 ```
 
-Important files:
+重要文件：
 
 ```text
 adapter_config.json
@@ -58,7 +58,7 @@ chat_template.jinja
 tokenizer.json
 ```
 
-Adapter config:
+Adapter 配置：
 
 ```text
 base_model_name_or_path = /root/autodl-tmp/agentic-rl-searchqa/.cache/models/Qwen3-8B-Base
@@ -70,7 +70,7 @@ target_modules = q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj
 task_type = CAUSAL_LM
 ```
 
-The adapter tensors are fp32:
+Adapter tensor 是 fp32：
 
 ```text
 adapter_model.safetensors: {'torch.float32': 504}
@@ -82,17 +82,17 @@ adapter_model.safetensors: {'torch.float32': 504}
 outputs/deepfactcite/deepfactcite-sft-qwen3-8b-lora-strict-100/global_step_100
 ```
 
-This was trained separately and is useful as an ablation. It is not currently the winner.
+这是单独训练的 adapter，适合作为消融项。目前它不是赢家。
 
-### Old bf16 Soft Merged Parent
+### 旧 bf16 Soft Merged Parent
 
-Original output path:
+原始输出路径：
 
 ```text
 outputs/deepfactcite/deepfactcite-sft-qwen3-8b-soft-merged
 ```
 
-This directory was deleted after diagnosis to recover disk space. Logs and eval reports remain:
+诊断后这个目录已删除，用于回收磁盘空间。日志和评测报告仍然保留：
 
 ```text
 logs/merge_soft100_lora.screen.log
@@ -103,29 +103,29 @@ reports/soft_merged_base_qwen3_8b_vllm_deepfactcite_strict_sft_test47.json
 reports/soft_merged_base_qwen3_8b_vllm_deepfactcite_strict_sft_test47.jsonl
 ```
 
-This old merge loaded the base with `torch_dtype=torch.bfloat16`, then called `PeftModel.from_pretrained(...).merge_and_unload()`.
+旧 merge 过程使用 `torch_dtype=torch.bfloat16` 加载 base，然后调用 `PeftModel.from_pretrained(...).merge_and_unload()`。
 
-Result:
+结果：
 
-- internally self-consistent after saving,
-- not equivalent to dynamic PEFT LoRA forward,
-- not safe as a continuation parent.
+- 保存后内部自洽；
+- 但不等价于 dynamic PEFT LoRA forward；
+- 不能安全地作为 continuation parent。
 
 ### fp32 Soft Merged Parent
 
-Current output path:
+当前输出路径：
 
 ```text
 outputs/deepfactcite/deepfactcite-sft-qwen3-8b-soft-merged-fp32
 ```
 
-Size:
+大小：
 
 ```text
 31G
 ```
 
-Important files:
+重要文件：
 
 ```text
 config.json
@@ -139,7 +139,7 @@ chat_template.jinja
 tokenizer.json
 ```
 
-Merge command shape:
+合并命令形态：
 
 ```bash
 /root/autodl-tmp/conda_envs/searchr1-qwen3-sft/bin/python \
@@ -150,14 +150,14 @@ Merge command shape:
   --torch-dtype float32
 ```
 
-Logs:
+日志：
 
 ```text
 logs/merge_soft100_fp32_lora.screen.log
 logs/merge_soft100_fp32_lora.exit
 ```
 
-Exit code:
+退出码：
 
 ```text
 0
@@ -165,13 +165,13 @@ Exit code:
 
 ### mix50 Continuation
 
-Original output path:
+原始输出路径：
 
 ```text
 outputs/deepfactcite/deepfactcite-sft-qwen3-8b-soft-merged-mix-50/global_step_50
 ```
 
-This directory was deleted after diagnosis because it was trained from the lossy bf16 merged parent and should not be continued. Logs and reports remain:
+诊断后这个目录已删除，因为它是从有损 bf16 merged parent 训练出来的，不应该继续使用。日志和报告仍然保留：
 
 ```text
 logs/deepfactcite-sft-qwen3-8b-soft-merged-mix-50.screen.log
@@ -182,7 +182,7 @@ reports/mix50_qwen3_8b_vllm_deepfactcite_strict_sft_test47.json
 reports/mix50_qwen3_8b_vllm_deepfactcite_strict_sft_test47.jsonl
 ```
 
-Training did complete normally:
+训练确实正常完成：
 
 ```text
 train steps = 50
@@ -190,19 +190,19 @@ val/loss = 1.016
 exit code = 0
 ```
 
-But because the parent was wrong, the result is not a valid continuation baseline.
+但由于 parent 是错的，这个结果不是有效的 continuation baseline。
 
-## Timeline
+## 时间线
 
-### Step 1: Soft SFT 100 existed as a LoRA adapter
+### Step 1：Soft SFT 100 以 LoRA adapter 形式存在
 
-The soft SFT checkpoint was an adapter, not a full model:
+soft SFT checkpoint 是 adapter，不是完整模型：
 
 ```text
 Base Qwen3-8B + LoRA delta
 ```
 
-The correct serving path was:
+正确的 serving path 是：
 
 ```bash
 vllm serve /root/autodl-tmp/agentic-rl-searchqa/.cache/models/Qwen3-8B-Base \
@@ -216,14 +216,14 @@ vllm serve /root/autodl-tmp/agentic-rl-searchqa/.cache/models/Qwen3-8B-Base \
   --lora-modules soft=outputs/deepfactcite/deepfactcite-sft-qwen3-8b-lora/global_step_100
 ```
 
-vLLM defaulted to bf16:
+vLLM 默认使用 bf16：
 
 ```text
 dtype=torch.bfloat16
 checkpoint size: 15.26 GiB
 ```
 
-This path produced the current reproducible soft baseline:
+这条路径产生了当前可复现的 soft baseline：
 
 ```text
 reports/soft_current_qwen3_8b_vllm_shortqa_guardrail32.json
@@ -232,19 +232,19 @@ reports/soft_current_qwen3_8b_vllm_deepfactcite_strict_sft_test47.json
 reports/soft_current_qwen3_8b_vllm_deepfactcite_strict_sft_test47.jsonl
 ```
 
-### Step 2: We needed a full parent to continue SFT
+### Step 2：继续 SFT 需要完整 parent
 
-The original trainer takes `model.partial_pretrain` as a full HF model path and creates a new LoRA adapter. It did not directly support:
+原始 trainer 把 `model.partial_pretrain` 当成完整 HF model 路径，并在其上创建新的 LoRA adapter。它不直接支持：
 
 ```text
 Base full model + existing LoRA adapter as parent
 ```
 
-So we tried to merge the soft adapter into a full model and then train a new LoRA on top.
+因此我们尝试先把 soft adapter 合并成完整模型，再在上面训练新的 LoRA。
 
-### Step 3: The first merge was done in bf16
+### Step 3：第一次 merge 使用了 bf16
 
-The old merge script loaded the base as bf16:
+旧 merge 脚本用 bf16 加载 base：
 
 ```python
 model = AutoModelForCausalLM.from_pretrained(
@@ -258,17 +258,17 @@ model = model.merge_and_unload()
 model.save_pretrained(output, safe_serialization=True, max_shard_size="4GB")
 ```
 
-This produced:
+这生成了：
 
 ```text
 outputs/deepfactcite/deepfactcite-sft-qwen3-8b-soft-merged
 ```
 
-That model looked valid on disk and could be served by vLLM, but its behavior was not equivalent to dynamic LoRA serving.
+这个模型在磁盘上看起来有效，也可以由 vLLM serve，但行为不等价于 dynamic LoRA serving。
 
-### Step 4: mix50 was trained from the lossy bf16 merged parent
+### Step 4：mix50 从有损 bf16 merged parent 继续训练
 
-Command shape:
+命令形态：
 
 ```bash
 BASE_MODEL=outputs/deepfactcite/deepfactcite-sft-qwen3-8b-soft-merged \
@@ -278,38 +278,38 @@ MODEL_SIZE=8B N_GPUS=2 TOTAL_STEPS=50 \
 bash scripts/deepfactcite/train_sft_qwen3.sh
 ```
 
-Training completed:
+训练完成：
 
 ```text
 step:50 - val/loss:1.016
 exit code: 0
 ```
 
-Eval showed it was not a winner:
+评测显示它不是赢家：
 
 | Model | ShortQA answer | ShortQA URL | ShortQA support | Strict47 URL | Strict47 support |
 |---|---:|---:|---:|---:|---:|
 | Soft dynamic LoRA bf16 | 0.469 | 0.812 | 0.240 | 0.346 | 0.103 |
 | mix50 | 0.375 | 0.625 | 0.190 | 0.312 | 0.087 |
 
-At this point, the right engineering response was not to train more, but to investigate the parent equivalence.
+此时正确的工程响应不是继续训练更多，而是调查 parent 是否等价。
 
-## Root Cause Investigation
+## 根因调查
 
-### Hypothesis 1: tokenizer or chat template mismatch
+### 假设 1：tokenizer 或 chat template 不匹配
 
-Checked:
+检查了：
 
-- soft adapter tokenizer,
-- bf16 merged tokenizer,
-- mix50 tokenizer,
-- base tokenizer.
+- soft adapter tokenizer；
+- bf16 merged tokenizer；
+- mix50 tokenizer；
+- base tokenizer。
 
-The chat templates were effectively consistent. This was not the main root cause.
+chat template 实际上是一致的。这不是主要根因。
 
-### Hypothesis 2: config mismatch
+### 假设 2：config 不匹配
 
-The merged config differed from base config in fields such as:
+merged config 与 base config 在这些字段上不同：
 
 ```text
 transformers_version
@@ -318,7 +318,7 @@ layer_types
 generation_config do_sample field
 ```
 
-Core architecture fields matched:
+核心架构字段一致：
 
 ```text
 model_type = qwen3
@@ -330,20 +330,20 @@ vocab_size = 151936
 rope_theta = 1000000
 ```
 
-Config differences were not sufficient to explain the major behavior shift.
+config 差异不足以解释明显的行为变化。
 
-### Hypothesis 3: bf16 merge lost LoRA delta fidelity
+### 假设 3：bf16 merge 损失了 LoRA delta 保真度
 
-This was confirmed.
+这个假设被证实了。
 
-Direct HF logits test:
+直接 HF logits 测试：
 
 ```text
 Prompt 0 length: 94 tokens
 Prompt 1 length: 98 tokens
 ```
 
-Comparison results:
+对比结果：
 
 | Comparison | Prompt | Max Abs Diff | Mean Abs Diff | Top1 Equal | Top10 Overlap |
 |---|---:|---:|---:|---:|---:|
@@ -354,23 +354,23 @@ Comparison results:
 | PEFT forward vs fp32 in-memory merge | 0 | 0.000081 | 0.000013 | yes | 10/10 |
 | PEFT forward vs fp32 in-memory merge | 1 | 0.000177 | 0.000077 | yes | 10/10 |
 
-Interpretation:
+解释：
 
-- Saving the merged model was not corrupting it.
-- The bad behavior came from doing the merge into bf16 weights.
-- fp32 merge is numerically equivalent to dynamic PEFT forward at the HF logits level.
+- 保存 merged model 的过程没有损坏模型。
+- 坏行为来自把 LoRA delta 合并进 bf16 权重这一步。
+- 在 HF logits 层面，fp32 merge 与 dynamic PEFT forward 数值等价。
 
-### Why bf16 merge is different from bf16 training/inference
+### 为什么 bf16 merge 不同于 bf16 训练/推理
 
-This point is easy to misunderstand.
+这一点很容易误解。
 
-The SFT trainer loads the model in fp32:
+SFT trainer 以 fp32 加载模型：
 
 ```python
 AutoModelForCausalLM.from_pretrained(..., torch_dtype=torch.float32)
 ```
 
-Then it wraps the model in FSDP mixed precision:
+然后用 FSDP mixed precision 包装模型：
 
 ```python
 MixedPrecision(
@@ -380,21 +380,21 @@ MixedPrecision(
 )
 ```
 
-So training can compute in bf16 while retaining a higher-precision master/optimizer pathway.
+所以训练可以用 bf16 计算，同时保留更高精度的 master/optimizer 路径。
 
-The problematic operation was different:
+出问题的是另一个操作：
 
 ```text
 base_weight_bf16 += lora_delta_fp32
 ```
 
-If the base weight tensor is already bf16 at merge time, small LoRA deltas can be rounded away or distorted when absorbed into the base weight. Dynamic LoRA serving avoids this because the LoRA delta remains a separate adapter path.
+如果 merge 时 base weight tensor 已经是 bf16，小的 LoRA delta 在吸收到 base weight 时可能被舍入掉或扭曲。Dynamic LoRA serving 避免了这个问题，因为 LoRA delta 仍然保留为独立 adapter 路径。
 
-### Hypothesis 4: fp32 merged full model should match dynamic LoRA vLLM eval
+### 假设 4：fp32 merged full model 应该匹配 dynamic LoRA vLLM eval
 
-This is not testable with the same vLLM dynamic LoRA path because vLLM's LoRA kernels do not support float32 LoRA weights.
+这个假设无法用同一条 vLLM dynamic LoRA 路径测试，因为 vLLM 的 LoRA kernel 不支持 float32 LoRA 权重。
 
-Attempted command shape:
+尝试过的命令形态：
 
 ```bash
 vllm serve /root/autodl-tmp/agentic-rl-searchqa/.cache/models/Qwen3-8B-Base \
@@ -403,14 +403,14 @@ vllm serve /root/autodl-tmp/agentic-rl-searchqa/.cache/models/Qwen3-8B-Base \
   --lora-modules soft=outputs/deepfactcite/deepfactcite-sft-qwen3-8b-lora/global_step_100
 ```
 
-It failed during LoRA graph profiling:
+它在 LoRA graph profiling 阶段失败：
 
 ```text
 assert weight.dtype in [torch.float16, torch.bfloat16]
 AssertionError
 ```
 
-So we cannot directly compare:
+所以我们无法直接比较：
 
 ```text
 vLLM float32 dynamic LoRA
@@ -418,29 +418,29 @@ vs
 vLLM float32 merged full model
 ```
 
-The only exact equivalence check available here is the HF logits comparison.
+这里唯一可用的精确等价性检查是 HF logits 对比。
 
-## Why Small Differences Can Move Eval Metrics
+## 为什么小差异会放大成评测指标变化
 
-This is not ordinary one-shot QA. It is a search-agent loop:
+这不是普通的单轮 QA，而是一个搜索智能体循环：
 
-1. Model emits `<search>query</search>`.
-2. Local lexical retriever returns top-k evidence.
-3. Model continues with retrieved snippets.
-4. It may search again or answer with citations.
-5. Reward checks answer, citation URLs, URL authenticity, and claim support.
+1. 模型输出 `<search>query</search>`。
+2. 本地词汇检索器返回 top-k 证据。
+3. 模型基于检索片段继续生成。
+4. 它可能继续搜索，也可能带引用作答。
+5. Reward 检查答案、引用 URL、URL 真实性和声明支持。
 
-If the first generated query changes slightly, the retrieved snippets can change. Once the snippets change, the whole later trajectory can diverge. Therefore a small model-side change can lead to large metric movement.
+如果第一条生成查询有细微变化，检索到的片段就可能变化。一旦片段变化，后续整个轨迹都可能分叉。因此，一个很小的模型侧变化也可能导致很大的指标变化。
 
-Examples observed in ShortQA32:
+ShortQA32 中观察到的例子：
 
-- Dynamic soft LoRA and fp32 merged often started similarly, but search queries differed.
-- Some changed queries returned weaker snippets.
-- Citation validity/support then changed even when the final answer was similar.
+- Dynamic soft LoRA 和 fp32 merged 往往开头相似，但搜索查询不同。
+- 有些变化后的查询返回了更弱的片段。
+- 即使最终答案相似，引用有效性和支持性也会变化。
 
-This is why deterministic `temperature=0` is necessary but not sufficient for cross-serving-path reproducibility.
+这就是为什么 `temperature=0` 是跨 serving path 可复现的必要条件，但不是充分条件。
 
-## Eval Results by Serving Path
+## 不同 Serving Path 的评测结果
 
 ### ShortQA32
 
@@ -455,7 +455,7 @@ This is why deterministic `temperature=0` is necessary but not sufficient for cr
 
 ### Strict47
 
-Strict47 has no gold answer, so `answer_subem` is not meaningful.
+Strict47 没有 gold answer，所以 `answer_subem` 没有意义。
 
 | Serving Path | Total | Citation Presence | URL Validity | Citation Precision | Claim Support | Unsupported | Search Turns |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -465,15 +465,15 @@ Strict47 has no gold answer, so `answer_subem` is not meaningful.
 | Soft bf16 merged full model | 0.138 | 0.277 | 0.234 | 0.070 | 0.055 | 0.762 | 0.979 |
 | mix50 from bf16 merged parent | 0.150 | 0.340 | 0.312 | 0.095 | 0.087 | 0.778 | 0.894 |
 
-## What Is Reproducible
+## 什么是可复现的
 
-Reproducible:
+可复现的是：
 
 ```text
 Base + soft LoRA, vLLM bf16 dynamic LoRA
 ```
 
-with:
+对应 artifact：
 
 ```text
 reports/soft_current_qwen3_8b_vllm_shortqa_guardrail32.jsonl
@@ -481,32 +481,32 @@ reports/soft_current_qwen3_8b_vllm_deepfactcite_strict_sft_test47.jsonl
 logs/vllm_origbase_soft.screen.log
 ```
 
-Not reproducible as equivalent:
+不能当作等价项复现的是：
 
 ```text
 Soft LoRA dynamic serving == merged full model serving
 ```
 
-The merged full model is a different serving path and must be labeled separately.
+merged full model 是不同 serving path，必须单独标注。
 
-## Engineering Fixes Applied
+## 已应用的工程修复
 
 ### Merge Script
 
-File:
+文件：
 
 ```text
 scripts/deepfactcite/merge_lora_adapter.py
 ```
 
-Changes:
+变更：
 
-- Added `--torch-dtype {float32,bfloat16}`.
-- Default changed to `float32`.
-- Tokenizer is loaded from adapter path if adapter contains tokenizer files.
-- Help text documents that bf16 merge is not numerically equivalent to PEFT forward.
+- 增加 `--torch-dtype {float32,bfloat16}`。
+- 默认值改为 `float32`。
+- 如果 adapter 路径包含 tokenizer 文件，则从 adapter 路径加载 tokenizer。
+- help 文本说明 bf16 merge 与 PEFT forward 在数值上不等价。
 
-Validation:
+验证：
 
 ```bash
 /root/autodl-tmp/conda_envs/searchr1-qwen3-sft/bin/python -m py_compile \
@@ -515,90 +515,90 @@ Validation:
 
 ### Reproducibility Log
 
-File:
+文件：
 
 ```text
 docs/deepfactcite_reproducibility_issue_log.md
 ```
 
-It records:
+它记录：
 
-- confirmed issues,
-- variables to record,
-- non-mixable result types,
-- current safe operating rules.
+- 已确认的问题；
+- 必须记录的变量；
+- 不能混在一起比较的结果类型；
+- 当前安全操作规则。
 
-## Interview-Quality Explanation
+## 面试级解释
 
-If asked by an interviewer why the merged checkpoint behaved differently:
+如果面试官问为什么 merged checkpoint 表现不同：
 
-> The original SFT checkpoint was a LoRA adapter on top of Qwen3-8B. For faster continuation, I initially merged the adapter into a full model, but the merge script loaded the base in bf16. The adapter tensors were fp32, and merging fp32 LoRA deltas into bf16 base weights caused a non-equivalent model. I verified this by comparing HF logits: PEFT dynamic forward vs bf16 merged had max logit differences up to 8.5, while PEFT dynamic forward vs fp32 merged differed by less than 2e-4. The saved model itself was not corrupted; the issue was the dtype at merge time. I patched the merge script to default to fp32 and updated eval protocol so dynamic-LoRA, bf16-merged, and fp32-merged serving paths are never mixed in one comparison.
+> 原始 SFT checkpoint 是 Qwen3-8B 上的一个 LoRA adapter。为了更快继续训练，我一开始把 adapter 合并成完整模型，但 merge 脚本用 bf16 加载 base。adapter tensor 是 fp32，把 fp32 LoRA delta 合并进 bf16 base weight 会产生一个不等价的模型。我用 HF logits 对比验证了这一点：PEFT dynamic forward vs bf16 merged 的最大 logit 差异最高到 8.5，而 PEFT dynamic forward vs fp32 merged 的差异小于 2e-4。保存模型本身没有损坏，问题出在 merge 时的 dtype。我把 merge 脚本默认值改成 fp32，并更新评测协议，确保 dynamic-LoRA、bf16-merged 和 fp32-merged serving path 不再混在同一张对比表里。
 
-If asked why eval moved a lot:
+如果被问到为什么 eval 数字变化很大：
 
-> This is a search-agent loop, not single-turn classification. A small difference in early generated tokens can change the search query, which changes retrieved evidence, which changes citations and answer support. So even greedy decoding can diverge across serving paths. We now save JSONL rollouts, vLLM logs, model paths, dtype, tokenizer, corpus, and exact serving path for every result.
+> 这是搜索智能体循环，不是单轮分类。早期生成 token 的细微差异会改变搜索查询，查询变化会改变检索证据，证据变化会改变引用和答案支持。因此，即使是 greedy decoding，不同 serving path 之间也可能分叉。现在我们为每个结果保存 JSONL rollouts、vLLM 日志、模型路径、dtype、tokenizer、语料库和精确 serving path。
 
-If asked what claims are safe:
+如果被问到哪些 claim 是安全的：
 
-> It is safe to claim that we built a Search-R1-style DeepFactCite pipeline and that the Soft SFT adapter improves citation behavior under a fixed dynamic-LoRA bf16 serving path. It is not safe to claim that merged checkpoints are interchangeable with dynamic LoRA serving, nor that mix50 improved the model, because mix50 was trained from a lossy bf16 merged parent.
+> 可以安全地说：我们构建了 Search-R1 风格的 DeepFactCite pipeline，并且 Soft SFT adapter 在固定 dynamic-LoRA bf16 serving path 下改善了引用行为。不应该说 merged checkpoint 与 dynamic LoRA serving 可互换，也不应该说 mix50 改善了模型，因为 mix50 是从有损 bf16 merged parent 训练出来的。
 
-## Resume Readiness Gate
+## 简历就绪门槛
 
-Ready to say:
+现在可以说：
 
-- Implemented DeepFactCite SFT/eval pipeline on top of Search-R1-style search-agent trajectories.
-- Added URL-authenticity and claim-support metrics/reward components.
-- Built deterministic vLLM evaluation with JSONL rollouts and fixed guardrail/citation eval sets.
-- Debugged and fixed a LoRA merge reproducibility issue by proving bf16 merge was not equivalent and switching merge to fp32.
+- 在 Search-R1 风格搜索智能体轨迹之上，实现了 DeepFactCite SFT/eval pipeline。
+- 增加了 URL 真实性和声明支持指标/reward 组件。
+- 构建了确定性的 vLLM 评测，保存 JSONL rollouts，并固定答案防护评测集和引用评测集。
+- 通过证明 bf16 merge 不等价并切换到 fp32 merge，定位并修复了 LoRA merge 可复现性问题。
 
-Not ready to say yet:
+还不能说：
 
-- Citation-aware GRPO beats outcome-only GRPO.
-- The merged full model is equivalent to the LoRA adapter.
-- mix50 improved the model.
-- The project beats Search-R1.
+- Citation-aware GRPO 击败 outcome-only GRPO。
+- Merged full model 等价于 LoRA adapter。
+- mix50 改善了模型。
+- 项目击败了 Search-R1。
 
-For a high-standard resume result, we still need:
+对于高标准简历结果，还需要：
 
-1. One fixed serving path for baseline and trained model.
-2. A valid continuation training path that does not rely on lossy bf16 merge.
-3. Base/Soft/Next-model tables using the same eval backend.
-4. Eventually outcome-only GRPO vs citation-aware GRPO under the same backend.
+1. baseline 和训练后模型使用同一个固定 serving path。
+2. 一条不依赖有损 bf16 merge 的有效 continuation 训练路径。
+3. Base/Soft/Next-model 在同一 eval backend 下的表格。
+4. 最终在同一 backend 下完成 outcome-only GRPO vs citation-aware GRPO。
 
-## Next Step
+## 下一步
 
-The next engineering step should be one of these:
+下一步工程工作应该从下面选一种：
 
-### Preferred
+### 首选
 
-Implement continuation from:
+实现从以下形式继续训练：
 
 ```text
 Base model + existing LoRA adapter
 ```
 
-without first merging the adapter into a full model. This preserves the dynamic-LoRA serving path and avoids comparing incompatible checkpoint forms.
+不要先把 adapter 合并成完整模型。这样可以保留 dynamic-LoRA serving path，并避免比较不兼容的 checkpoint 形式。
 
-### Acceptable
+### 可接受
 
-Use the fp32 merged parent only as a training initialization path, but label all evals as merged-full-model evals and do not compare them as identical to dynamic LoRA baseline.
+只把 fp32 merged parent 当作训练初始化路径，但所有 eval 都要标成 merged-full-model eval，不要把它们和 dynamic LoRA baseline 当作同一个东西比较。
 
-### Do Not Do
+### 不要做
 
-Do not continue training from:
+不要从下面这个路径继续训练：
 
 ```text
 outputs/deepfactcite/deepfactcite-sft-qwen3-8b-soft-merged
 ```
 
-or from `mix50`. Those were tied to the lossy bf16 merged parent.
+也不要从 `mix50` 继续。它们都和有损 bf16 merged parent 绑定。
 
-## Current Operational State
+## 当前操作状态
 
-At the end of this postmortem:
+本复盘结束时：
 
-- No screen jobs are running.
-- GPUs are idle.
-- `outputs/deepfactcite/deepfactcite-sft-qwen3-8b-soft-merged-fp32` exists and is the only current merged full parent.
-- Old bf16 merged parent and mix50 adapter directories were deleted to recover disk space.
-- Logs and JSON/JSONL reports were retained for audit.
+- 没有正在运行的 screen job。
+- GPU 空闲。
+- `outputs/deepfactcite/deepfactcite-sft-qwen3-8b-soft-merged-fp32` 存在，是当前唯一的 merged full parent。
+- 旧 bf16 merged parent 和 mix50 adapter 目录已经删除，用于回收磁盘。
+- 日志和 JSON/JSONL 报告保留下来用于审计。

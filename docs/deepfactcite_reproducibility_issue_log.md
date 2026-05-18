@@ -1,77 +1,71 @@
-# DeepFactCite Reproducibility Issue Log
+# DeepFactCite 可复现性问题日志
 
-Date: 2026-05-18
+日期：2026-05-18
 
-This note tracks issues found while evaluating Qwen3-8B Soft SFT, merged checkpoints, and continuation runs. The goal is to prevent mixing incompatible evaluation paths and to make every reported number reproducible.
+本文记录评估 Qwen3-8B Soft SFT、合并 checkpoint 和继续训练时发现的问题。目标是避免混用不兼容的评测路径，并保证每个报告数字都能复现。
 
-## Success Standard
+## 成功标准
 
-The final project deliverable must include both:
+最终项目交付件必须包括：
 
-1. A result table that meets the intended target: preserve Search-R1-style
-   answer/search behavior while improving DeepFactCite citation authenticity
-   and claim support.
-2. A failure ledger that explains every failed or non-winning SFT attempt well
-   enough for external review.
+1. 一张符合项目目标的结果表：保留 Search-R1 风格的答案/搜索行为，同时提高 DeepFactCite 引用真实性和声明支持。
+2. 一份失败台账：充分解释每次失败或未胜出的 SFT 尝试，达到外部审核也能看懂的程度。
 
-Training completion is not enough. A run only counts as useful evidence if its
-artifact path, serving path, dataset, metrics, and failure analysis are
-recoverable from this log or the linked report.
+仅完成训练是不够的。只有当工件路径、服务路径、数据集、指标和失败分析都能从本日志或链接报告中恢复时，一次运行才算有用证据。
 
-## Current Baselines
+## 当前基线
 
-Fixed eval sets:
+固定评测集：
 
-- ShortQA guardrail: `data/shortqa_guardrail/rl/test.parquet`, 32 rows, has gold answers.
-- DeepFactCite strict citation eval: `data/deepfactcite_strict/sft/test.parquet`, 47 rows, no gold answer; `answer_subem` is not meaningful.
+- ShortQA 防护评测：`data/shortqa_防护评测/rl/test.parquet`，32 行，有 gold answer。
+- DeepFactCite 严格引用评测：`data/deepfactcite_strict/sft/test.parquet`，47 行，无 gold answer；`answer_subem` 无意义。
 
-Current reports:
+当前报告：
 
-| Model / Serving Path | Eval | Answer | Total | URL Validity | Citation Precision | Claim Support | Unsupported | Search Turns |
+| 模型/服务路径 | Eval | Answer | 总分 | URL 有效性 | 引用精确度 | 声明支持度 | 不支持 | 搜索轮数 |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| Base Qwen3-8B, vLLM bf16 | ShortQA32 | 0.219 | 0.189 | 0.031 | 0.038 | 0.031 | 0.906 | 2.625 |
-| `Base + soft LoRA`, vLLM bf16 dynamic LoRA | ShortQA32 | 0.438 | 0.391 | 0.812 | 0.292 | 0.292 | 0.557 | 1.156 |
-| `Base + mixclean200 LoRA`, vLLM bf16 dynamic LoRA | ShortQA32 | 0.500 | 0.427 | 0.969 | 0.333 | 0.333 | 0.495 | 1.125 |
-| `soft` bf16 merged full model | ShortQA32 | 0.438 | 0.444 | 0.844 | 0.375 | 0.375 | 0.479 | 1.125 |
-| `soft` fp32 merged full model, vLLM fp32 | ShortQA32 | 0.406 | 0.361 | 0.688 | 0.240 | 0.237 | 0.615 | 1.000 |
-| `soft` bf16 merged + mix50 LoRA | ShortQA32 | 0.375 | 0.324 | 0.625 | 0.190 | 0.190 | 0.750 | 1.156 |
-| Base Qwen3-8B, vLLM bf16 | Strict47 | N/A | 0.120 | 0.064 | 0.062 | 0.021 | 0.574 | 1.745 |
-| `Base + soft LoRA`, vLLM bf16 dynamic LoRA | Strict47 | N/A | 0.137 | 0.319 | 0.070 | 0.064 | 0.851 | 1.000 |
-| `Base + mixclean200 LoRA`, vLLM bf16 dynamic LoRA | Strict47 | N/A | 0.142 | 0.418 | 0.074 | 0.072 | 0.879 | 1.234 |
-| `soft` bf16 merged full model | Strict47 | N/A | 0.138 | 0.234 | 0.070 | 0.055 | 0.762 | 0.979 |
-| `soft` bf16 merged + mix50 LoRA | Strict47 | N/A | 0.150 | 0.312 | 0.095 | 0.087 | 0.778 | 0.894 |
+| Base Qwen3-8B、vLLM、bf16 | ShortQA32 | 0.219 | 0.189 | 0.031 | 0.038 | 0.031 | 0.906 | 2.625 |
+| `Base + soft LoRA`、vLLM、bf16 dynamic LoRA | ShortQA32 | 0.438 | 0.391 | 0.812 | 0.292 | 0.292 | 0.557 | 1.156 |
+| `Base + mixclean200 LoRA`、vLLM、bf16 dynamic LoRA | ShortQA32 | 0.500 | 0.427 | 0.969 | 0.333 | 0.333 | 0.495 | 1.125 |
+| `soft` bf16 合并完整模型 | ShortQA32 | 0.438 | 0.444 | 0.844 | 0.375 | 0.375 | 0.479 | 1.125 |
+| `soft` fp32 合并完整模型，vLLM fp32 | ShortQA32 | 0.406 | 0.361 | 0.688 | 0.240 | 0.237 | 0.615 | 1.000 |
+| `soft` bf16 合并 + mix50 LoRA | ShortQA32 | 0.375 | 0.324 | 0.625 | 0.190 | 0.190 | 0.750 | 1.156 |
+| Base Qwen3-8B、vLLM、bf16 | Strict47 | N/A | 0.120 | 0.064 | 0.062 | 0.021 | 0.574 | 1.745 |
+| `Base + soft LoRA`、vLLM、bf16 dynamic LoRA | Strict47 | N/A | 0.137 | 0.319 | 0.070 | 0.064 | 0.851 | 1.000 |
+| `Base + mixclean200 LoRA`、vLLM、bf16 dynamic LoRA | Strict47 | N/A | 0.142 | 0.418 | 0.074 | 0.072 | 0.879 | 1.234 |
+| `soft` bf16 合并完整模型 | Strict47 | N/A | 0.138 | 0.234 | 0.070 | 0.055 | 0.762 | 0.979 |
+| `soft` bf16 合并 + mix50 LoRA | Strict47 | N/A | 0.150 | 0.312 | 0.095 | 0.087 | 0.778 | 0.894 |
 
-Decision so far:
+到目前为止的决定：
 
-- The current best SFT candidate is `Base + mixclean200 LoRA` served as a dynamic LoRA adapter in vLLM bf16.
-- `mixclean200` is better than `soft100` on ShortQA32 answer, URL validity, citation precision, claim support, unsupported rate, and search turns under the same serving path.
-- `mixclean200` is also better than `soft100` on Strict47 URL validity, citation precision, and claim support, but its Strict47 unsupported and fake URL rates are still high. This is a candidate SFT initialization, not the final credible-citation claim.
-- `mixclean200` passed the Search-R1 core BM25 guardrail: 200-row NQ/HotpotQA subEM 0.490 versus `soft100` 0.450 and Base 0.290, with search success 1.000 and no search-turn spike.
-- `mix50` is not a winner and should not be continued.
-- The old bf16 merged parent must not be used as a continuation parent.
+- 当前最佳 SFT 候选是 `Base + mixclean200 LoRA`，在 vLLM bf16 中以 dynamic LoRA adapter 方式服务。
+- `mixclean200` 在 ShortQA32 的答案、URL 有效性、引用精确度、声明支持、不支持率和搜索轮数上优于 `soft100`。
+- `mixclean200` 在 Strict47 的 URL 有效性、引用精确度和声明支持上也优于 `soft100`，但 Strict47 的不支持率和虚假 URL 率仍然很高。因此它只是候选 SFT 初始化，不是最终可信引用结论。
+- `mixclean200` 通过了 Search-R1 核心 BM25 防护评测：200 行 NQ/HotpotQA，subEM 0.490，高于 `soft100` 的 0.450 和 Base 的 0.290；搜索成功率 1.000，没有搜索轮数峰值问题。
+- `mix50`不是赢家，不应继续。
+- 旧的 bf16 合并 parent 不得用作继续训练 parent。
 
-## SFT Failure Ledger
+## SFT 故障台账
 
-### F-SFT-001: Strict SFT did not automatically beat Soft SFT
+### F-SFT-001：Strict SFT 没有自动击败 Soft SFT
 
-Hypothesis:
+假说：
 
 ```text
-Filtering SFT traces for URL validity and claim support should improve citation
-behavior and become the default SFT winner.
+按 URL 有效性和声明支持过滤 SFT 轨迹，应该改善引用行为，并成为默认 SFT 胜出方案。
 ```
 
-Artifacts:
+工件：
 
 ```text
-Soft adapter:
+Soft adapter：
 outputs/deepfactcite/deepfactcite-sft-qwen3-8b-lora/global_step_100
 
-Strict adapter:
+Strict adapter：
 outputs/deepfactcite/deepfactcite-sft-qwen3-8b-lora-strict-100/global_step_100
 ```
 
-Observed result:
+观察结果：
 
 ```text
 ShortQA32:
@@ -83,47 +77,45 @@ Strict47:
   Strict dynamic LoRA: total 0.137, URL validity 0.282, claim support 0.063
 ```
 
-Analysis:
+分析：
 
-Strict filtering improved the intended data cleanliness constraint, but it also
-reduced training diversity and may have narrowed answer/search behavior coverage.
-For this stage, strict data is a useful ablation, not the default winner.
+严格过滤改善了预期的数据清洁度约束，但也减少了训练多样性，并可能缩小了答案/搜索行为覆盖范围。
+在这个阶段，严格的数据是一种有用的消融，而不是默认的赢家。
 
-Decision:
+结论：
 
 ```text
-Do not promote strict SFT unless it wins under the same serving path and eval.
-Keep Soft SFT 100 dynamic LoRA as the current SFT baseline.
+除非 strict SFT 在相同服务路径和相同评测下胜出，否则不要提升为默认方案。
+继续把 Soft SFT 100 dynamic LoRA 作为当前 SFT 基线。
 ```
 
-Guardrail:
+防护措施：
 
 ```text
-Any future "higher quality" SFT dataset must be evaluated against Soft SFT 100
-on both answer/search guardrail data and DeepFactCite citation data before more
-training is launched.
+未来任何“更高质量”的 SFT 数据集，在启动更多训练之前，
+都必须同时在 answer/search 防护评测数据和 DeepFactCite 引用数据上与 Soft SFT 100 对比。
 ```
 
-### F-SFT-002: bf16 LoRA merge was not equivalent to dynamic LoRA
+### F-SFT-002：bf16 LoRA 合并不等同于 dynamic LoRA
 
-Hypothesis:
+假说：
 
 ```text
-Base Qwen3-8B + Soft LoRA dynamic serving should be equivalent to a merged Soft
-full model, so the merged model can be used as a continuation parent.
+Base Qwen3-8B + Soft LoRA dynamic serving 应该等价于合并后的 Soft 完整模型，
+因此合并模型可以作为继续训练 parent。
 ```
 
-Artifacts:
+工件：
 
 ```text
-Dynamic LoRA:
+Dynamic LoRA：
 Base model + outputs/deepfactcite/deepfactcite-sft-qwen3-8b-lora/global_step_100
 
-Old bf16 merged full model:
+旧 bf16 merged full model：
 outputs/deepfactcite/deepfactcite-sft-qwen3-8b-soft-merged
 ```
 
-Observed result:
+观察结果：
 
 ```text
 HF logits:
@@ -135,50 +127,47 @@ HF logits:
     max abs logit diff < 0.0002
 ```
 
-Analysis:
+分析：
 
-The saved bf16 merged model was internally consistent, but it was not equivalent
-to PEFT dynamic LoRA forward. The failure came from adding fp32 LoRA deltas into
-bf16 base weights during `merge_and_unload()`.
+保存的 bf16 合并模型内部一致，但不等价于 PEFT dynamic LoRA forward。
+失败原因是在 `merge_and_unload()` 期间，把 fp32 LoRA 增量加到了 bf16 base weight 上。
 
-Decision:
+结论：
 
 ```text
-Delete/retire the old bf16 merged parent.
-Patch merge_lora_adapter.py so float32 is the default merge dtype.
-Use HF logits equivalence checks before trusting merged parents.
+删除或弃用旧的 bf16 merged parent。
+修补 merge_lora_adapter.py，使 float32 成为默认合并 dtype。
+信任 merged parent 之前，先做 HF logits 等价性检查。
 ```
 
-Guardrail:
+防护措施：
 
 ```text
-Merged checkpoints are not valid continuation parents until PEFT-vs-merged HF
-logits are checked and documented.
+在完成并记录 PEFT-vs-merged HF logits 检查前，merged checkpoint 不能视为有效的继续训练 parent。
 ```
 
-### F-SFT-003: mix50 continuation trained from an invalid parent
+### F-SFT-003：从无效 parent 继续训练的 MIX50
 
-Hypothesis:
+假说：
 
 ```text
-Continue SFT for 50 steps from the merged Soft parent on mix data to improve
-or stabilize citation behavior.
+从 merged Soft parent 出发，在 mix 数据上继续 SFT 50 步，以改善或稳定引用行为。
 ```
 
-Artifacts:
+工件：
 
 ```text
-Original mix50 adapter:
+原始 mix50 adapter：
 outputs/deepfactcite/deepfactcite-sft-qwen3-8b-soft-merged-mix-50/global_step_50
 
-Parent:
+Parent：
 outputs/deepfactcite/deepfactcite-sft-qwen3-8b-soft-merged
 ```
 
-Observed result:
+观察结果：
 
 ```text
-Training completed:
+训练完成：
   train steps = 50
   val/loss = 1.016
   exit code = 0
@@ -190,61 +179,59 @@ Strict47:
   total 0.150, URL validity 0.312, claim support 0.087
 ```
 
-Analysis:
+分析：
 
-The training run itself did not crash, but its parent checkpoint was the lossy
-bf16 merged model from F-SFT-002. Therefore the result is not a clean answer to
-whether mix-data continuation helps.
+训练本身没有崩溃，但它的 parent checkpoint 是 F-SFT-002 中那个有损的 bf16 合并模型。
+因此，这个结果不能干净回答 mix-data 继续训练是否有帮助。
 
-Decision:
+结论：
 
 ```text
-Do not continue from mix50.
-Do not report mix50 as a candidate winner.
-Keep only as a failure/ablation record.
+不要从 mix50 继续训练。
+不要把 mix50 报告为候选胜出模型。
+仅把它保留为失败/消融记录。
 ```
 
-Guardrail:
+防护措施：
 
 ```text
-Before continuation SFT, verify the parent model and record the exact lineage:
-base -> adapter or fp32 merged parent -> continuation adapter.
+继续 SFT 之前，先验证 parent model，并记录精确血统：
+base -> adapter 或 fp32 merged parent -> continuation adapter。
 ```
 
-### S-SFT-001: mix-clean 200 became the current SFT candidate, but not the final answer
+### S-SFT-001：mix-clean 200 成为当前 SFT 候选，但不是最终答案
 
-Hypothesis:
+假说：
 
 ```text
-Train a clean mixed SFT adapter directly from Base Qwen3-8B for 200 steps,
-instead of continuing from a merged Soft parent, so answer/search guardrail
-behavior is preserved while citation behavior improves.
+直接从 Base Qwen3-8B 训练一个干净的 mixed SFT adapter 200 步，
+而不是从 merged Soft parent 继续训练；目标是在保留 answer/search 防护评测行为的同时改善引用行为。
 ```
 
-Artifacts:
+工件：
 
 ```text
-Train script:
+训练脚本：
 scripts/deepfactcite/launch_mix_clean_sft_200.sh
 
-Adapter:
+Adapter：
 outputs/deepfactcite/deepfactcite-sft-qwen3-8b-lora-mix-clean-200/global_step_200
 
-Eval launcher:
+Eval 启动器：
 scripts/deepfactcite/wait_then_eval_mixclean_sft.sh
 scripts/deepfactcite/launch_vllm_base_soft_mixclean.sh
 scripts/deepfactcite/run_mixclean_sft_eval_suite.sh
 
-Reports:
-reports/base_qwen3_8b_mixclean_rerun_vllm_shortqa_guardrail32.json
+报告：
+reports/base_qwen3_8b_mixclean_rerun_vllm_shortqa_防护评测32.json
 reports/base_qwen3_8b_mixclean_rerun_vllm_deepfactcite_strict_sft_test47.json
-reports/soft100_qwen3_8b_mixclean_rerun_vllm_shortqa_guardrail32.json
+reports/soft100_qwen3_8b_mixclean_rerun_vllm_shortqa_防护评测32.json
 reports/soft100_qwen3_8b_mixclean_rerun_vllm_deepfactcite_strict_sft_test47.json
-reports/mixclean200_qwen3_8b_vllm_shortqa_guardrail32.json
+reports/mixclean200_qwen3_8b_vllm_shortqa_防护评测32.json
 reports/mixclean200_qwen3_8b_vllm_deepfactcite_strict_sft_test47.json
 ```
 
-Observed result:
+观察结果：
 
 ```text
 ShortQA32:
@@ -258,332 +245,322 @@ Strict47:
   Mix200:   total 0.142, URL 0.418, precision 0.074, support 0.072, unsupported 0.879, fake 0.071
 ```
 
-Analysis:
+分析：
 
-The run is a meaningful SFT improvement under a controlled dynamic-LoRA bf16
-serving path. It improves ShortQA answer/search guardrail metrics and improves
-URL validity/support on both eval sets. However, Strict47 unsupported and fake
-URL rates remain high because the model cites more aggressively. This supports
-the original project thesis: SFT can teach citation behavior, but credible
-citation requires reward-time authenticity and claim-support constraints.
+该运行是在受控 dynamic-LoRA bf16 服务路径下完成的有意义 SFT 改进。
+它提升了 ShortQA 答案/搜索防护评测指标，也改善了两个 eval 集上的 URL 有效性和支持性。
+但是 Strict47 的 unsupported 与 fake URL 率仍然很高，因为模型引用更积极了。
+这支持原始项目判断：SFT 可以教会引用行为，但可信引用还需要在 reward 阶段加入来源真实性和声明支持约束。
 
-Decision:
+结论：
 
 ```text
-Use mixclean200 as the current SFT initialization candidate for the next stage.
-Do not claim final credible-citation success from SFT alone.
-Next stage must add hard fake/unsupported citation penalties and run
-outcome-only vs citation-aware GRPO.
+把 mixclean200 作为下一阶段当前 SFT 初始化候选。
+不要仅凭 SFT 宣称已经实现最终可信引用。
+下一阶段必须加入对 fake/unsupported citation 的硬惩罚，
+并运行 outcome-only vs citation-aware GRPO。
 ```
 
-Search-R1 answer/search guardrail:
+Search-R1 答案/搜索防护评测：
 
 ```text
-Dataset:
-  data/searchr1_core_guardrail/test.parquet
+数据集：
+  data/searchr1_core_防护评测/test.parquet
   200 rows = NQ 100 + HotpotQA 100
 
-Retriever:
+检索器：
   wiki-18 BM25 + extracted wiki_dump.jsonl
 
-Results:
+结果：
   Base:     subEM 0.290, search 0.960, budget fail 0.170
   Soft100:  subEM 0.450, search 0.990, budget fail 0.045
   Mix200:   subEM 0.490, search 1.000, budget fail 0.025
 ```
 
-This guardrail is BM25-controlled, not the paper's official E5 reproduction.
-It is valid for same-backbone local comparison because only the served model
-changes.
+这张防护评测由 BM25 控制，不是论文官方 E5 设置的复现。
+它适合同一骨干下的本地比较，因为唯一变化的是被服务的模型。
 
-### F-SFT-004: Answer metrics were initially interpreted on a no-gold citation set
+### F-SFT-004：最初误把无 gold answer 的引用集当作答案评测集
 
-Hypothesis:
+假说：
 
 ```text
-DeepFactCite strict47 can be used for both answer/search and citation metrics.
+DeepFactCite strict47 可以同时用于 answer/search 指标和引用指标。
 ```
 
-Observed result:
+观察结果：
 
 ```text
-data/deepfactcite_strict/sft/test.parquet has no gold answer target.
-answer_subem from this set is not meaningful.
+data/deepfactcite_strict/sft/test.parquet 没有 gold answer target。
+这个集合上的 answer_subem 没有意义。
 ```
 
-Analysis:
+分析：
 
-DeepFactCite strict47 is a citation-behavior eval set. It can measure citation
-presence, URL validity, precision, claim support, unsupported citation rate,
-fake URL rate, search turns, and response length. It cannot support a reliable
-answer_subem conclusion without gold answers.
+DeepFactCite strict47 是一个引用行为评估集。它可以衡量引用存在性、URL 有效性、引用精确度、声明支持、不支持引用率、fake URL rate、搜索轮数和响应长度。
+但由于没有 gold answer，它不能支持可靠的 `answer_subem` 结论。
 
-Decision:
+结论：
 
 ```text
-Use ShortQA32 and Search-R1 NQ/HotpotQA-style data for answer/search guardrails.
-Use strict47 for citation behavior only.
+使用 ShortQA32 和 Search-R1 NQ/HotpotQA 风格数据做 answer/search 防护评测。
+strict47 只用于引用行为评测。
 ```
 
-Guardrail:
+防护措施：
 
 ```text
-Every eval table must label whether answer_subem is applicable for that dataset.
+每张 eval 表都必须标明 `answer_subem` 是否适用于该数据集。
 ```
 
-### F-SFT-005: Serving path changes closed-loop search-agent metrics
+### F-SFT-005：服务路径会改变闭环搜索智能体指标
 
-Hypothesis:
+假说：
 
 ```text
-If two checkpoints are close at the logits level, greedy vLLM eval should give
-the same aggregate metrics.
+如果两个 checkpoint 在 logits 层面很接近，greedy vLLM eval 应该给出相同的聚合指标。
 ```
 
-Observed result:
+观察结果：
 
 ```text
-Soft dynamic LoRA bf16, soft bf16 merged full model, and soft fp32 merged full
-model produced different aggregate metrics under closed-loop search eval.
+Soft dynamic LoRA bf16、soft bf16 merged full model 和 soft fp32 merged full model
+在闭环搜索评测中产生了不同聚合指标。
 ```
 
-Analysis:
+分析：
 
-Search-agent eval amplifies small generation differences:
+Search-agent eval 会放大小的生成差异：
 
 ```text
-early token difference -> different search query -> different retrieved snippets
--> different answer/citation trajectory -> different metrics
+早期 token 差异 -> 不同搜索查询 -> 不同检索片段
+-> 不同答案/引用轨迹 -> 不同指标
 ```
 
-Greedy decoding does not remove differences caused by dynamic LoRA vs merged
-weights, dtype, attention backend, or vLLM loading path.
+贪婪解码不会消除 dynamic LoRA、合并权重、dtype、attention 后端或 vLLM 加载路径带来的差异。
 
-Decision:
+结论：
 
 ```text
-Treat serving path as part of the model identity.
-Do not mix dynamic-LoRA results with merged-model results in the same baseline.
+把 serving path 视为模型身份的一部分。
+不要把 dynamic-LoRA 结果和 merged-model 结果混在同一张基线表里。
 ```
 
-Guardrail:
+防护措施：
 
 ```text
-Every result table must include serving path labels such as:
+每张结果表都必须包含 serving path 标签，例如：
 base_bf16, soft_dynamic_lora_bf16, soft_merged_bf16, soft_merged_fp32.
 ```
 
-## Confirmed Issues
+## 已确认的问题
 
-### 1. bf16 LoRA merge is not numerically equivalent
+### 1. bf16 LoRA 合并在数值上不等价
 
-The old merge script loaded the base model with `torch_dtype=torch.bfloat16`, then called `merge_and_unload()`.
+旧合并脚本用 `torch_dtype=torch.bfloat16` 加载 base model，然后调用 `merge_and_unload()`。
 
-Direct HF logits checks showed:
+直接 HF logits 检查显示：
 
-| Comparison | Max Abs Logit Diff | Top1 |
+| 对比 | 最大绝对 logit 差异 | Top1 |
 |---|---:|---|
-| `PEFT forward(Base+LoRA)` vs in-memory bf16 merge | 3.328 / 8.547 on two prompts | Same in tested prompts, but logits differ heavily |
-| in-memory bf16 merge vs saved bf16 merged model | 0.0 | Same |
-| `PEFT forward(Base+LoRA)` vs in-memory fp32 merge | < 0.0002 | Same |
+| `PEFT forward(Base+LoRA)` 与内存中 bf16 合并 | 两个 prompt 上为 3.328/8.547 | 在测试 prompt 中相同，但 logit 差异很大 |
+| 内存中 bf16 合并与保存的 bf16 合并模型 | 0.0 | 相同 |
+| `PEFT forward(Base+LoRA)` 与内存中 fp32 合并 | < 0.0002 | 相同 |
 
-Conclusion:
+结论：
 
-- Saved bf16 merge was internally consistent, but it was a lossy merge.
-- The loss comes from adding the fp32 LoRA delta into bf16 base weights.
-- The merge script now defaults to `--torch-dtype float32`.
+- 保存的 bf16 合并在内部一致，但它是有损合并。
+- 损失来自于将 fp32 LoRA 增量添加到 bf16 base weight 中。
+- 合并脚本现在默认为`--torch-dtype float32`。
 
-### 2. Training dtype and merge dtype are different concepts
+### 2. 训练 dtype 和合并 dtype 是不同概念
 
-The SFT trainer loads `partial_pretrain` with `torch_dtype=torch.float32` and then uses FSDP mixed precision:
+SFT 训练器使用 `torch_dtype=torch.float32` 加载 `partial_pretrain`，然后使用 FSDP 混合精度：
 
-- parameters loaded in fp32,
-- compute/mixed precision in bf16,
-- LoRA adapter tensors saved as fp32.
+- 加载参数使用 float32，
+- 计算/混合精度由 FSDP 控制，
+- LoRA adapter 张量保存为 fp32。
 
-Therefore fp32 merge for a training parent is not a contradiction. It prevents losing the LoRA delta during the merge step. Training can still use bf16 mixed precision.
+因此，用 fp32 合并训练 parent 并不矛盾。它可以防止在合并步骤中丢失 LoRA 增量，而训练仍然可以使用 bf16 混合精度。
 
-### 3. vLLM dynamic LoRA does not support float32 LoRA kernels
+### 3. vLLM dynamic LoRA 不支持 float32 LoRA kernel
 
-Attempting to run `Base + soft LoRA` in vLLM with `--dtype float32` failed during LoRA graph profiling:
+在 LoRA 图模式分析期间，尝试用 `--dtype float32` 在 vLLM 中运行 `Base + soft LoRA` 失败：
 
 ```text
 assert weight.dtype in [torch.float16, torch.bfloat16]
 AssertionError
 ```
 
-So we cannot use vLLM to compare:
+所以不能用 vLLM 比较：
 
-- `Base + soft LoRA` in float32 dynamic LoRA mode
-- vs `soft` fp32 merged full model
+- `Base + soft LoRA` 的 float32 dynamic LoRA 模式
+- vs `soft` fp32 合并完整模型
 
-The closest exact equivalence check is HF logits, not vLLM generation.
+最接近精确等价性的检查是 HF logits，而不是 vLLM 生成。
 
-### 4. vLLM serving path changes output even under greedy decoding
+### 4. 即使使用贪婪解码，vLLM 服务路径也会改变输出
 
-Search-agent evaluation is a closed loop:
+搜索智能体评估是一个闭环：
 
-1. model emits a search query,
-2. retriever returns snippets,
-3. model continues from retrieved snippets,
-4. answer/citation metrics depend on all previous text.
+1. 模型发出搜索查询，
+2. retriever 返回片段，
+3. 模型从检索到的片段中继续，
+4. 答案/引用指标取决于之前的所有文本。
 
-Small early-token differences can change the search query and therefore the whole trajectory. Greedy decoding does not guarantee identical rollouts across:
+小的早期 token 差异可以改变搜索查询，从而改变整个轨迹。贪婪解码不能保证以下路径的 rollouts 相同：
 
-- dynamic LoRA vs merged full model,
-- bf16 vs fp32,
-- FlashAttention vs Triton attention,
-- different vLLM model loading paths.
+- dynamic LoRA 与合并完整模型，
+- bf16 与 fp32，
+- FlashAttention 与 Triton attention，
+- 不同 vLLM 模型加载路径。
 
-This is why aggregate eval can move by several points even when direct single-step logits look close.
+这就是为什么即使直接单步 logits 看起来很接近，聚合 eval 也可能移动几个点。
 
-## Variables That Must Be Recorded
+## 必须记录的变量
 
-For every run, record all of the following:
+对于每次运行，记录以下所有内容：
 
-### Model Identity
+### 模型标识
 
-- Base model path.
-- Adapter path, if any.
-- Merged full-model path, if any.
-- Whether model is dynamic LoRA or merged.
-- Whether merge was bf16 or fp32.
-- Adapter `base_model_name_or_path`.
-- Model commit/checksum if available.
+- base model 路径。
+- adapter 路径（如果有）。
+- merged full model 路径（如果有）。
+- 模型是 dynamic LoRA 还是 merged。
+- 合并 dtype 是 bf16 还是 fp32。
+- adapter 的 `base_model_name_or_path`。
+- 模型提交/校验和（如果可用）。
 
-### Serving Backend
+### 服务后端
 
-- vLLM version.
+- vLLM 版本。
 - `--dtype`.
 - `--tensor-parallel-size`.
 - `--max-model-len`.
 - `--gpu-memory-utilization`.
-- Whether `--enable-lora` is used.
-- Attention backend from log: FlashAttention, Triton, etc.
-- Whether model was served as base model, LoRA module, or full merged model.
-- The exact vLLM startup log path.
+- 是否使用`--enable-lora`。
+- 日志中的 attention 后端：FlashAttention、Triton 等。
+- 模型是作为 base model、LoRA module 还是 merged full model 加载。
+- 精确的 vLLM 启动日志路径。
 
-### Prompt and Tokenizer
+### 提示和令牌生成器
 
-- Tokenizer path passed to eval script.
-- Chat template source.
-- Prompt construction function/version.
-- Stop markers.
-- `max_new_tokens`, `temperature`, `top_p` if used.
+- 传给 eval 脚本的 tokenizer 路径。
+- 模板来源。
+- prompt 构造函数/版本。
+- 停止标记。
+- `max_new_tokens`、`temperature`、`top_p` （如果使用）。
 
-### Retrieval and Agent Loop
+### 检索和代理循环
 
-- Eval parquet path.
-- Corpus JSONL path.
-- Retriever implementation/version.
+- eval parquet 路径。
+- 语料库 JSONL 路径。
+- 检索器实现/版本。
 - `topk`.
 - `max_turns`.
-- Whether results are resumed from JSONL.
-- Search query normalization, if changed.
+- 是否从 JSONL 恢复结果。
+- 搜索查询规范化（如果更改）。
 
-### Reward and Metrics
+### 奖励和指标
 
-- Reward code version.
-- Whether prompt tokens are included or response-only is scored.
-- Ground-truth schema.
-- Whether `answer_subem` is meaningful for that dataset.
-- Aggregation script/version.
+- 奖励代码版本。
+- 是否包含提示令牌或仅对响应进行评分。
+- ground-truth schema。
+- `answer_subem` 对该数据集是否有意义。
+- 聚合脚本/版本。
 
-### Environment
+### 环境
 
-- Conda env.
-- torch, transformers, peft, vLLM, verl versions.
-- CUDA visible devices.
-- GPU type.
-- Relevant env vars such as `CUDA_VISIBLE_DEVICES`, `TOKENIZERS_PARALLELISM`, `WANDB_MODE`.
+- Conda env。
+- PyTorch、Transformers、PEFT、vLLM、verl 版本。
+- CUDA 可见设备。
+- GPU 类型。
+- `CUDA_VISIBLE_DEVICES`、`TOKENIZERS_PARALLELISM`、`WANDB_MODE`等相关环境变量。
 
-## Non-Mixable Result Types
+## 不可混合的结果类型
 
-Do not compare these as if they are the same model:
+请勿将它们视为相同的模型进行比较：
 
-- `Base + soft LoRA` dynamic vLLM bf16 vs `soft` bf16 merged full model.
-- `Base + soft LoRA` dynamic vLLM bf16 vs `soft` fp32 merged full model served as vLLM fp32.
-- Old aggregate-only reports vs current JSONL-backed reports.
-- Strict47 citation eval vs ShortQA answer guardrail.
-- DeepFactCite strict test `answer_subem` vs ShortQA `answer_subem`; strict47 has no gold answer.
+- `Base + soft LoRA` dynamic vLLM bf16 vs `soft` bf16 merged full model。
+- `Base + soft LoRA` dynamic vLLM bf16 vs `soft` fp32 merged full model（vLLM fp32）。
+- 旧的仅聚合报告 vs 当前有 JSONL 支撑的报告。
+- Strict47 引用评测 vs ShortQA 答案防护评测。
+- DeepFactCite strict 测试的 `answer_subem` vs ShortQA `answer_subem`；strict47 没有 gold answer。
 
-## Required Reproducibility Protocol
+## 所需的重现性方案
 
-Every eval must produce:
+每个评估必须生成：
 
-1. JSONL rollouts.
-2. Aggregate JSON.
-3. vLLM startup log.
-4. Command line used.
-5. Git status/diff summary.
-6. Dataset/corpus path.
-7. Serving path label:
+1. JSONL rollouts。
+2. 聚合 JSON。
+3. vLLM 启动日志。
+4. 已使用命令行。
+5. Git 状态/差异摘要。
+6. 数据集/语料库路径。
+7. serving path 标签：
    - `base_bf16`
    - `soft_dynamic_lora_bf16`
    - `soft_merged_bf16`
    - `soft_merged_fp32`
-   - etc.
+   - 等等
 
-Every comparison table must say which serving path was used.
+每个比较表都必须说明使用了哪个服务路径。
 
-## Current Safe Operating Rules
+## 当前安全操作规则
 
-1. For current SFT baseline reporting, use `Base + soft LoRA` as dynamic LoRA under vLLM bf16.
-2. Do not use the bf16 merged parent as a training parent.
-3. If a full parent is needed for continuation SFT, create it with fp32 merge.
-4. Do not claim an improvement unless it beats the same baseline under the same serving path and eval script.
-5. Keep ShortQA32 as answer/search guardrail and Strict47 as citation-behavior eval.
-6. If a result changes unexpectedly, first run a one-prompt HF logits comparison before spending GPU time on full eval.
-7. For large Hugging Face artifacts on this machine, run `unvpn` first and prefer domestic mirrors plus `aria2c`; direct HF/Xet transfer was observed to be much slower.
-8. Treat `wiki-18.jsonl.gz` as a compressed archive until validated; the downloaded artifact was a gzip-compressed tar payload, not a naked JSONL gzip.
+1. 对于当前 SFT 基线报告，使用 `Base + soft LoRA` 作为 vLLM bf16 下的 dynamic LoRA。
+2. 不要把 bf16 merged parent 用作训练 parent。
+3. 如果继续 SFT 需要完整 parent，请用 fp32 合并创建。
+4. 除非在相同 serving path 和 eval 脚本下击败同一基线，否则不要宣称改进。
+5. 保留 ShortQA32 作为答案/搜索防护评测，Strict47 作为引用行为评测。
+6. 如果结果意外变化，先运行单 prompt HF logits 对比，再把 GPU 时间花在完整评测上。
+7. 对于该机器上的大型 Hugging Face 工件，先运行 `unvpn`，优先使用国内镜像加 `aria2c`；观察到直接 HF/Xet 传输慢得多。
+8. 验证前，把 `wiki-18.jsonl.gz` 当作压缩存档；下载到的工件是 gzip 压缩的 tar payload，而不是裸 JSONL gzip。
 
-## Infrastructure Notes
+## 基础设施备注
 
-## GRPO Failure Ledger
+## GRPO 故障台账
 
-### F-GRPO-001: Retrieval-hit GRPO proved plumbing but not citation support
+### F-GRPO-001：检索命中 GRPO 证明管道可用，但没有解决引用支持
 
-Hypothesis:
+假说：
 
 ```text
-If GRPO examples are built so the target URL is retrievable, DeepFactCite reward
-should improve citation quality.
+如果 GRPO 样例保证目标 URL 可被检索到，DeepFactCite reward 应该能改善引用质量。
 ```
 
-Observed result:
+观察结果：
 
 ```text
-2-GPU smoke completed 16 steps / 32 samples.
+2-GPU smoke 完成 16 steps / 32 samples。
 reward 0.218, search 0.938, URL validity 0.594, citation precision 0.126,
 claim support 0.122, unsupported citation rate 0.755.
 ```
 
-Analysis:
+分析：
 
 ```text
-Retrieving a relevant URL is not the same as supporting the local claim next to
-the citation. The model can cite a real URL while writing a broader sentence
-than the snippet proves.
+检索到相关 URL 不等于引用旁边的局部声明得到了支持。
+模型可以引用真实 URL，同时写出比片段所能证明范围更宽的句子。
 ```
 
-Decision:
+结论：
 
 ```text
-Do not run a long GRPO from retrieval-hit data. Build claim-level
-support-filtered data first.
+不要基于 retrieval-hit 数据直接跑长 GRPO。
+先构建 claim-level support-filtered 数据。
 ```
 
-### F-GRPO-002: v1 claim-filtered citation-aware did not beat outcome-only
+### F-GRPO-002：v1 声明过滤数据上的引用感知没有击败 outcome-only
 
-Hypothesis:
+假说：
 
 ```text
-On the same claim-filtered data, citation-aware reward should improve URL
-validity, citation precision, claim support, and unsupported citation rate over
-outcome-only reward.
+在同一份 claim-filtered 数据上，citation-aware reward 应该相对 outcome-only reward
+改善 URL validity、citation precision、claim support 和 unsupported citation rate。
 ```
 
-Artifacts:
+工件：
 
 ```text
 reports/deepfactcite_claimfiltered_grpo_ablation_2gpu_20260518.md
@@ -593,47 +570,45 @@ logs/grpo/rollouts/dfc-mixclean200-claimfiltered-outcome-only-20260518_claimfilt
 logs/grpo/rollouts/dfc-mixclean200-claimfiltered-citation-aware-20260518_claimfiltered_2gpu/
 ```
 
-Observed result:
+观察结果：
 
-| Metric | Outcome-Only | Citation-Aware |
+| 指标 | Outcome-Only | Citation-Aware |
 |---|---:|---:|
 | search | 1.0000 | 1.0000 |
-| URL validity | 0.7656 | 0.6979 |
-| citation precision | 0.4219 | 0.3828 |
-| claim support | 0.4219 | 0.3828 |
-| unsupported citation rate | 0.4219 | 0.4844 |
-| fake URL rate | 0.0469 | 0.0521 |
-| mean step response clip ratio | 0.1563 | 0.2813 |
+| URL 有效性 | 0.7656 | 0.6979 |
+| 引用精确度 | 0.4219 | 0.3828 |
+| 声明支持 | 0.4219 | 0.3828 |
+| 不支持的引用率 | 0.4219 | 0.4844 |
+| 虚假 URL 率 | 0.0469 | 0.0521 |
+| 平均步长响应剪辑比 | 0.1563 | 0.2813 |
 
-Analysis:
-
-```text
-The run did not justify scaling. The likely failure is data/prompt mismatch:
-some original questions are broad, while the selected supported claim is narrow.
-The model answers the broad question, adds extra facts, and then the citation is
-attached to a local claim that the retrieved snippet does not fully support.
-```
-
-Decision:
+分析：
 
 ```text
-Do not switch to 4 GPUs.
-Do not run longer on the same v1 data.
-Create a stricter one-claim / one-citation dataset with query-length filtering
-and a one-sentence prompt, then run a small repair smoke before any larger
-ablation.
+这次运行不足以支撑扩展规模。可能的失败原因是 data/prompt 不匹配：
+部分原始问题很宽，而被选中的受支持声明很窄。
+模型回答宽问题时会加入额外事实，然后把引用附在一个检索片段并不能完全支持的局部声明上。
 ```
 
-### S-GRPO-001: v2 one-citation data was built as the repair path
-
-Purpose:
+结论：
 
 ```text
-Reduce unsupported broad expansion by making each row a single supported claim
-with one retrieved citation and a one-sentence prompt.
+不要切到 4 GPUs。
+不要在同一份 v1 数据上跑更久。
+构建更严格的 one-claim / one-citation 数据集，加入 query-length 过滤和 one-sentence prompt；
+在任何更大消融前，先跑一个小规模修复 smoke。
 ```
 
-Artifacts:
+### S-GRPO-001：v2 one-citation 数据是修复路径
+
+目的：
+
+```text
+把每一行改成一个受支持声明、一条检索引用和一个 one-sentence prompt，
+从而减少不受支持的宽泛扩写。
+```
+
+工件：
 
 ```text
 data/deepfactcite_sglang_grpo_claim_filtered_v2_onecite/train.parquet
@@ -642,7 +617,7 @@ data/deepfactcite_sglang_grpo_claim_filtered_v2_onecite/corpus.jsonl
 data/deepfactcite_sglang_grpo_claim_filtered_v2_onecite/summary.json
 ```
 
-Build result:
+生成结果：
 
 ```text
 kept rows 32
@@ -654,25 +629,24 @@ reject reasons: weak_claim_support 43, query_too_broad 19,
 too_few_supported_claims 3, claim_too_broad 1
 ```
 
-Next check:
+下一次检查：
 
 ```text
-Run a short v2 citation-aware smoke. If it reduces unsupported/no-citation/clip
-failures, run the fair v2 outcome-only vs citation-aware ablation. If it does
-not, fix reward or prompt before spending more GPU.
+先跑一个短的 v2 citation-aware smoke。
+如果它减少 unsupported/no-citation/clip 失败，就跑公平的 v2 outcome-only vs citation-aware 消融。
+如果没有减少，先修 reward 或 prompt，再继续花 GPU。
 ```
 
-### S-GRPO-002: v2 citation-aware beat v2 outcome-only on the same data
+### S-GRPO-002：v2 引用感知在同一数据上击败 v2 outcome-only
 
-Hypothesis:
+假说：
 
 ```text
-If broad-question over-answering is reduced with one-claim / one-citation data,
-explicit citation/support reward should beat outcome-only reward on citation
-quality while preserving search.
+如果 one-claim / one-citation 数据能减少宽问题过度回答，
+显式 citation/support reward 应该在保持搜索的同时，在引用质量上击败 outcome-only reward。
 ```
 
-Artifacts:
+工件：
 
 ```text
 reports/deepfactcite_v2_onecite_grpo_ablation_2gpu_20260518.md
@@ -680,94 +654,93 @@ reports/dfc_mixclean200_claimfiltered_v2_onecite_citation_aware_2gpu_rollout_sum
 reports/dfc_mixclean200_claimfiltered_v2_onecite_outcome_only_2gpu_rollout_summary.md
 ```
 
-Observed result:
+观察结果：
 
-| Metric | Outcome-Only | Citation-Aware |
+| 指标 | Outcome-Only | Citation-Aware |
 |---|---:|---:|
 | search | 0.9688 | 1.0000 |
-| URL validity | 0.1562 | 0.7188 |
-| citation precision | 0.1125 | 0.3937 |
-| claim support | 0.1094 | 0.3906 |
-| unsupported citation rate | 0.8438 | 0.3750 |
-| no_citation failures | 27 | 9 |
-| response clip ratio | 0.0000 | 0.0000 |
+| URL 有效性 | 0.1562 | 0.7188 |
+| 引用精确度 | 0.1125 | 0.3937 |
+| 声明支持 | 0.1094 | 0.3906 |
+| 不支持的引用率 | 0.8438 | 0.3750 |
+| no_citation 失败 | 27 | 9 |
+| 响应剪辑比率 | 0.0000 | 0.0000 |
 
-Analysis:
-
-```text
-This is the first clean positive GRPO signal in the current phase. The key win
-is not raw reward; it is the same-data diagnostic improvement in URL validity,
-support, unsupported rate, and citation count.
-```
-
-Decision:
+分析：
 
 ```text
-v2 data should replace v1 for the next citation GRPO iteration. Do not promote
-to 4 GPUs yet because no checkpoint was saved and no_citation remains 9/32.
+这是当前阶段第一个干净的正向 GRPO 信号。
+关键胜利不是 raw reward，而是在同一数据上 URL validity、support、unsupported rate 和 citation count 的诊断指标改善。
 ```
 
-### F-GRPO-003: citation-strong weights did not fix citation omission
-
-Hypothesis:
+结论：
 
 ```text
-Increasing citation/support weights should reduce no_citation failures on v2.
+下一轮 citation GRPO 应使用 v2 数据替代 v1。
+暂时不要提升到 4 GPUs，因为这次没有保存 checkpoint，且 no_citation 仍为 9/32。
 ```
 
-Artifacts:
+### F-GRPO-003：更强引用权重没有修复引用遗漏
+
+假说：
+
+```text
+提高 citation/support 权重应该能减少 v2 上的 no_citation 失败。
+```
+
+工件：
 
 ```text
 reports/dfc_mixclean200_v2_onecite_citation_strong_2gpu_rollout_summary.md
 logs/grpo/rollouts/dfc-mixclean200-v2-onecite-citation-strong-20260518_2gpu/
 ```
 
-Observed result:
+观察结果：
 
-| Metric | Default Citation-Aware | Citation-Strong |
+| 指标 | 默认引用感知 | Citation-Strong |
 |---|---:|---:|
 | search | 1.0000 | 1.0000 |
-| URL validity | 0.7188 | 0.7188 |
-| citation precision | 0.3937 | 0.4219 |
-| claim support | 0.3906 | 0.4219 |
-| unsupported citation rate | 0.3750 | 0.4375 |
-| no_citation failures | 9 | 9 |
-| response clip ratio | 0.0000 | 0.0000 |
+| URL 有效性 | 0.7188 | 0.7188 |
+| 引用精确度 | 0.3937 | 0.4219 |
+| 声明支持 | 0.3906 | 0.4219 |
+| 不支持的引用率 | 0.3750 | 0.4375 |
+| no_citation失败 | 9 | 9 |
+| 响应剪辑比率 | 0.0000 | 0.0000 |
 
-Analysis:
-
-```text
-Higher citation/support weights improved average support, but no_citation did
-not move and unsupported rate worsened. The remaining failure is more discrete:
-the model sometimes outputs no markdown citation, a bare [S_xxx], [1], or a raw
-URL rather than [label](URL). Scalar reward weights are too blunt for this.
-```
-
-Decision:
+分析：
 
 ```text
-Patch reward/prompt for exact markdown URL citation presence before more
-training. Penalize no-citation and bare-label citations directly. Re-run a
-16-step smoke after that patch.
+更高的 citation/support 权重改善了平均 support，但 no_citation 没有变化，unsupported rate 反而变差。
+剩余失败更像离散格式问题：模型有时不输出 markdown citation，
+或者输出裸 [S_xxx]、[1]、原始 URL，而不是 [label](URL)。
+单纯调标量 reward 权重对此太粗。
 ```
 
-### INF-001: Large HF artifact download path matters
+结论：
 
-Date: 2026-05-18
+```text
+继续训练前，先修 reward/prompt，明确要求精确的 markdown URL citation。
+直接惩罚 no-citation 和 bare-label citation。
+修补后重新跑 16-step smoke。
+```
 
-Context:
+### INF-001：大型 HF 工件下载路径很重要
 
-- Needed `PeterJinGo/wiki-18-corpus/wiki-18.jsonl.gz` for Search-R1 BM25 docid-to-text lookup.
-- The official BM25 index stores only `id`, not raw document contents.
-- Direct Hugging Face/Xet download through `aria2c` was initially slow, around sub-MB/s to about 0.7 MB/s.
+日期：2026-05-18
 
-Resolution:
+内容：
 
-- User enabled command-line `unvpn`.
-- Download was retried through `hf-mirror.com` with `aria2c`.
-- Observed speed increased to around 12 MiB/s.
+- 需要 `PeterJinGo/wiki-18-corpus/wiki-18.jsonl.gz` 来做 Search-R1 BM25 文档到文本查找。
+- 官方 BM25 索引只存储 `id`，不存储原始文档内容。
+- 最初通过 `aria2c` 直接下载 Hugging Face/Xet 较慢，速度低于 1 MB/s 到约 0.7 MB/s。
 
-Preferred command pattern:
+处理方式：
+
+- 用户在命令行启用 `unvpn`。
+- 通过 `hf-mirror.com` 和 `aria2c` 重试下载。
+- 观察到速度提升到约 12 MiB/s。
+
+首选命令模式：
 
 ```bash
 unvpn
@@ -784,29 +757,29 @@ aria2c -d data/wiki-18-corpus -o wiki-18.jsonl.gz -x 8 -s 8 -j 4 -k 1M \
   https://hf-mirror.com/datasets/PeterJinGo/wiki-18-corpus/resolve/main/wiki-18.jsonl.gz
 ```
 
-Lesson:
+经验：
 
-- Before starting multi-GB downloads, test the network path and mirror.
-- Do not assume `aria2c` alone is enough; route selection dominated throughput in this environment.
+- 开始多 GB 下载前，先测试网络路径和镜像。
+- 不要假设只用 `aria2c` 就足够；在这个环境中，路由选择影响更大。
 
-### INF-002: wiki-18 corpus file is a tar payload despite the `.jsonl.gz` name
+### INF-002：wiki-18 语料库文件虽然名为 `.jsonl.gz`，实际是 tar payload
 
-Date: 2026-05-18
+日期：2026-05-18
 
-Observed:
+观察结果：
 
 ```text
 gzip -t data/wiki-18-corpus/wiki-18.jsonl.gz
   passed
 
-Reading as UTF-8 JSONL:
+按 UTF-8 JSONL 读取：
   UnicodeDecodeError at byte 0x80
 
-First decompressed bytes:
+解压后的开头字节：
   tar header with ustar marker
 ```
 
-Actual payload:
+实际 payload：
 
 ```text
 data00/jiajie_jin/flashrag_indexes/wiki_dpr_100w/wiki_dump.jsonl
@@ -814,7 +787,7 @@ uncompressed size: 14393573105 bytes
 record shape: {"id": "...", "contents": "..."}
 ```
 
-Resolution:
+处理方式：
 
 ```bash
 tar -xOzf data/wiki-18-corpus/wiki-18.jsonl.gz \
@@ -823,44 +796,40 @@ tar -xOzf data/wiki-18-corpus/wiki-18.jsonl.gz \
 mv data/wiki-18-corpus/wiki_dump.jsonl.tmp data/wiki-18-corpus/wiki_dump.jsonl
 ```
 
-Lesson:
+经验：
 
-- Validate both compression and logical file format before wiring the corpus
-  into a retriever.
-- The Search-R1 BM25 server should use
-  `data/wiki-18-corpus/wiki_dump.jsonl` as `--corpus-path`, not the downloaded
-  `wiki-18.jsonl.gz` archive.
+- 接到检索器之前，先验证压缩格式和逻辑文件格式。
+- Search-R1 BM25 服务器应使用 `data/wiki-18-corpus/wiki_dump.jsonl` 作为 `--corpus-path`，
+  而不是下载到的 `wiki-18.jsonl.gz` 存档。
 
-## Open Questions
+## 开放式问题
 
-### GRPO-001: old SGLang backend `custom` reward manager does not use `custom_reward_function.path`
+### GRPO-001：旧 SGLang 后端的 `custom` 奖励管理器不使用 `custom_reward_function.path`
 
-Date: 2026-05-18
+日期：2026-05-18
 
-Observed:
+观察结果：
 
 ```text
 scripts/train_grpo_2xa800.sh sets:
   reward_model.reward_manager=custom
   custom_reward_function.path=...
 
-But /root/autodl-tmp/SearchShortQA/verl/verl/workers/reward_manager/custom.py
-calls agentic_rl_searchqa.rewards.reward_manager.RewardManager directly and
-does not call the loaded compute_score function.
+但是 /root/autodl-tmp/SearchShortQA/verl/verl/workers/reward_manager/custom.py
+直接调用 agentic_rl_searchqa.rewards.reward_manager.RewardManager，
+没有调用已加载的 compute_score function。
 ```
 
-Risk:
+风险：
 
-- A run can look like it is using DeepFactCite reward while actually using the
-  old project reward.
-- This would invalidate outcome-only vs citation-aware GRPO comparisons.
+- 运行看起来可能像是在使用 DeepFactCite reward，但实际仍在使用旧项目 reward。
+- 这会让 outcome-only 与 citation-aware 的 GRPO 比较失效。
 
-Resolution:
+处理方式：
 
-- Keep old backend code unchanged.
-- Register `deepfactcite_custom` from
-  `scripts/deepfactcite/verl_deepfactcite_reward.py`.
-- Launch GRPO with:
+- 保持旧的后端代码不变。
+- 注册 `deepfactcite_custom`，来源为 `scripts/deepfactcite/verl_deepfactcite_reward.py`。
+- 通过以下方式启动 GRPO：
 
 ```text
 reward_model.reward_manager=deepfactcite_custom
@@ -868,26 +837,25 @@ custom_reward_function.path=/root/autodl-tmp/Search-R1-DeepFactCite/scripts/deep
 custom_reward_function.name=compute_score
 ```
 
-Verification from the 2-GPU smoke run:
+2-GPU smoke 运行验证：
 
 ```text
 reward_manager: deepfactcite_custom
 using customized reward function 'compute_score' from .../verl_deepfactcite_reward.py
-RewardManagerWorker loaded the same path
-rollout_data_step_1.jsonl contains DeepFactCite details:
+RewardManagerWorker 加载了同一路径
+rollout_data_step_1.jsonl 包含 DeepFactCite 细节：
   url_validity, citation_precision, claim_support, unsupported_citation_rate
 ```
 
-Lesson:
+经验：
 
-- Never trust Hydra `custom_reward_function.path` alone; inspect the selected
-  reward manager implementation and prove the reward source in logs.
+- 不要只相信 Hydra `custom_reward_function.path`；要检查实际选中的奖励管理器实现，并在日志中证明 reward 来源。
 
-### GRPO-002: GRPO smoke rows must be retrieval-hit filtered
+### GRPO-002：GRPO smoke 行必须经过检索命中过滤
 
-Date: 2026-05-18
+日期：2026-05-18
 
-Observed in the first 2-GPU smoke rollout:
+在第一个 2-GPU smoke rollout 中观察到：
 
 ```text
 Query: Bach BWV 171 structure/scoring/features
@@ -896,90 +864,83 @@ Rollout 2: retrieved irrelevant Magnificat / acoustics snippets.
 Rewards: 0.08 to 0.10, citation_count=0, claim_support=0.
 ```
 
-Interpretation:
+解释：
 
-- The GRPO mechanism is working: weak/no evidence receives low reward.
-- As training data, blind `head(24)` long questions are inefficient because the
-  offline smoke corpus may not contain or retrieve supporting evidence.
+- GRPO 机制正在发挥作用：弱/无证据获得低奖励。
+- 作为训练数据，盲目 `head(24)` 选择长问题效率很低，因为离线 smoke 语料库可能不包含或检索不到支持证据。
 
-Resolution for the next run:
+下次运行的处理方式：
 
-- Build a `retrieval-hit` GRPO subset before spending longer GPU time.
-- Require at least one top-k retrieved URL/text with meaningful lexical overlap
-  against the query and expected evidence.
-- Keep short QA guardrail rows, but avoid long rows whose retrieved evidence is
-  empty or obviously off-topic.
+- 在花费更长 GPU 时间前，构建 `retrieval-hit` GRPO 子集。
+- 查询与预期证据之间，至少需要一个有意义词汇 overlap 的 top-k 检索 URL/text。
+- 保留短 QA 防护评测行，但避免证据为空或明显偏题的长行。
 
-Lesson:
+经验：
 
-- For citation-faithful RL, data quality means prompt quality plus retriever
-  hit quality. A correct reward cannot learn useful citation behavior if the
-  environment rarely supplies valid evidence.
+- 对可信引用 RL 而言，数据质量 = prompt 质量 + 检索命中质量。
+  如果环境很少提供有效证据，即使 reward 正确，模型也很难学到有用的引用行为。
 
-### GRPO-003: short tool responses can truncate URLs and break URL validity
+### GRPO-003：短工具响应会截断 URL 并破坏 URL 有效性
 
-Date: 2026-05-18
+日期：2026-05-18
 
-Observed in the first 2-GPU smoke run:
+在第一次 2-GPU smoke 运行中观察到：
 
 ```text
 max_tool_response_length=256
 tool response URL: https://pixe...(truncated)...
 ```
 
-Risk:
+风险：
 
-- The model cannot copy the exact retrieved URL.
-- URL validity can be scored as fake/invalid even when the retriever found a
-  relevant page.
+- 模型无法复制准确检索到的 URL。
+- 即使检索器找到了相关页面，URL 有效性也可能被评为 fake/invalid。
 
-Resolution:
+处理方式：
 
-- Use fewer results and longer tool responses for citation training:
+- 使用更少的结果和更长的工具响应进行引用训练：
 
 ```text
 SEARCHQA_TOPK=2
 GRPO_MAX_TOOL_RESPONSE_LENGTH=768
 ```
 
-Lesson:
+经验：
 
-- In citation RL, tool-response truncation is not just a context-length issue;
-  it changes the label by destroying the URL string.
+- 在引用 RL 中，工具响应截断不只是上下文长度问题；
+  它会破坏 URL 字符串，从而改变标签。
 
-### GRPO-004: SGLang memory fraction can be too low as well as too high
+### GRPO-004：SGLang 内存分数过低或过高都会出问题
 
-Date: 2026-05-18
+日期：2026-05-18
 
-Observed:
+观察结果：
 
 ```text
 GRPO_GPU_MEMORY_UTILIZATION=0.12
 RuntimeError: Not enough memory. Please try to increase --mem-fraction-static.
 ```
 
-Interpretation:
+解释：
 
-- Lowering SGLang memory fraction too far can make the static memory pool too
-  small for the 8B TP=2 rollout server.
-- The prior value `0.15` initialized successfully on 2 A800 GPUs.
+- SGLang 内存分数降得太低时，静态内存池反而不足，无法支撑 8B、TP=2 的 rollout server。
+- 经验值 `0.15` 在 2 张 A800 GPU 上可以成功初始化。
 
-Resolution:
+处理方式：
 
 ```text
 GRPO_GPU_MEMORY_UTILIZATION=0.15
 ```
 
-Lesson:
+经验：
 
-- Treat SGLang memory fraction as a required static-pool sizing parameter, not
-  only as a knob for reducing memory pressure.
+- 把 SGLang 内存分数视为静态池大小参数，而不只是降低显存压力的旋钮。
 
-### GRPO-005: retrieval-hit improves URL validity but not enough claim support
+### GRPO-005：检索命中提高了 URL 有效性，但声明支持仍不足
 
-Date: 2026-05-18
+日期：2026-05-18
 
-Retrieval-hit smoke result over 32 sampled trajectories:
+32 个采样轨迹上的检索命中 smoke 结果：
 
 ```text
 format = 1.000
@@ -990,7 +951,7 @@ claim_support = 0.122
 unsupported_citation_rate = 0.755
 ```
 
-Best observed supported case:
+观察到的最佳支持样例：
 
 ```text
 reward ~= 0.625
@@ -999,57 +960,53 @@ claim_support = 0.75
 unsupported_citation_rate = 0.0
 ```
 
-Interpretation:
+解释：
 
-- The reward and SGLang backend are working.
-- The model can produce valid, supported citations when the snippet is direct.
-- Most sampled claims remain broader than the retrieved evidence, so support
-  stays low.
+- reward 和 SGLang 后端工作正常。
+- 当片段是直接的，模型可以生成有效的、受支持的引用。
+- 大多数采样声明仍然比检索证据更宽，因此支持指标保持低位。
 
-Next fix:
+下一个修复：
 
-- Construct the next GRPO dataset at the claim level, not just the query level:
-  choose SFT traces where final cited claims are directly supported by compact
-  retrieved snippets.
-  Keep answers short enough that citations appear before response truncation.
+- 下一份 GRPO 数据集要按声明级别构建，而不是只按查询级别构建：
+  选择那些最终引用声明能被 compact 检索片段直接支持的 SFT traces。
+  答案尽量短，确保引用出现在回复截断之前。
 
-### GRPO-006: claim-level filtering must reject low-information supported fragments
+### GRPO-006：声明级过滤必须拒绝低信息支持的片段
 
-Date: 2026-05-18
+日期：2026-05-18
 
-Observed:
+观察结果：
 
 ```text
-The first claim-level support filter produced rows whose cited URL was valid and
-whose overlap support was 1.0, but a small number of selected claims were too
-low-information for RL, for example heading-like fragments rather than useful
-answer claims.
+第一版 claim-level support filter 产出的行满足引用 URL 有效、overlap support 为 1.0，
+但少量被选中声明的信息量太低，不适合 RL；
+例如它们更像标题片段，而不是有用的答案声明。
 ```
 
-Risk:
+风险：
 
-- A lexical support filter can over-credit title/heading fragments.
-- GRPO could learn to cite narrow but unhelpful fragments instead of concise,
-  answer-bearing claims.
+- 词汇支持过滤器可能过度奖励标题/小标题片段。
+- GRPO 可能学会引用狭窄但无益的片段，而不是简洁、有答案信息的声明。
 
-Resolution:
+处理方式：
 
 ```text
 scripts/deepfactcite/prepare_sglang_grpo_claim_filtered.py
 ```
 
-now filters:
+现在过滤器：
 
 ```text
-1-2 citations
-retrieved URL only
-no truncated/fake citation URL
+1-2 条引用
+只允许检索返回的 URL
+不允许截断或虚假的引用 URL
 claim support score >= 1.0
-claim length cap
-low-information citation fragments
+声明长度上限
+过滤低信息量引用片段
 ```
 
-Generated artifacts:
+生成的工件：
 
 ```text
 data/deepfactcite_sglang_grpo_claim_filtered/train.parquet
@@ -1060,7 +1017,7 @@ data/deepfactcite_sglang_grpo_claim_filtered/preview.jsonl
 data/deepfactcite_sglang_grpo_claim_filtered/reject_samples.jsonl
 ```
 
-Validation:
+验证结果：
 
 ```text
 kept rows: 32
@@ -1071,115 +1028,112 @@ test top-2 retriever URL hit: 4/4
 reject reasons while collecting: weak_claim_support=54, too_few_supported_claims=5
 ```
 
-Decision:
+结论：
 
-- Use this dataset for the first outcome-only vs citation-aware 2-GPU ablation.
-- Keep `save_freq=0` until disk cleanup; `/root/autodl-tmp` has about 14G free.
-- Do not scale to 4 GPUs until the 2-GPU ablation shows a real citation metric
-  gain without answer/search collapse.
+- 使用此数据集进行第一次 2-GPU outcome-only vs citation-aware 消融。
+- 在磁盘清理前保留 `save_freq=0`；`/root/autodl-tmp` 大约只有 14G 可用。
+- 在 2-GPU 消融显示真正的引用指标收益，且 answer/search 没有崩溃之前，不要扩展到 4-GPU。
 
-## Open Questions
+## 开放式问题
 
-1. Can we add a trainer path that resumes from `Base + existing LoRA` without full merge?
-2. Can we evaluate continuation adapters without changing the serving path from the baseline?
-3. Should we use HF generation for small deterministic sanity evals where exact LoRA/merge equivalence matters more than speed?
-4. Should vLLM eval standardize on dynamic LoRA bf16 only, and keep merged fp32 for training initialization only?
+1. 能否添加一个无需完整合并、直接从 `Base + existing LoRA` 恢复的 Trainer 路径？
+2. 能否在不改变基线 serving path 的情况下评估 continuation adapter？
+3. 当精确的 LoRA/merge 等价性比速度更重要时，是否应该用 HF generation 做小规模确定性 sanity eval？
+4. vLLM 评测是否只标准化到 dynamic LoRA bf16，而把 fp32 merge 仅保留作训练初始化？
 
-## Immediate Next Step
+## 立即下一步
 
-Do not continue from `mix50`.
+不要从 `mix50` 继续。
 
-`mixclean200` has passed the local Search-R1 BM25 answer/search guardrail and is
-the current SFT baseline candidate.
+`mixclean200` 已通过本地 Search-R1 BM25 answer/search 防护评测，
+是当前 SFT 基线候选。
 
-Immediate next step:
+下一步：
 
-1. Use `mixclean200` as the likely initialization checkpoint.
-2. Port or reuse the Qwen3/SGLang GRPO backend.
-3. Run outcome-only GRPO and citation-aware GRPO with the same backbone/data.
-4. Keep fake/unsupported citation hard penalties in the citation-aware reward.
-5. Keep reporting original Search-R1 paper numbers only as external reference
-   unless the official E5 setup is reproduced.
+1. 使用 `mixclean200` 作为可能的初始化 checkpoint。
+2. 移植或重用 Qwen3/SGLang GRPO 后端。
+3. 使用相同 backbone/数据运行 outcome-only GRPO 和 citation-aware GRPO。
+4. 在引用感知奖励中保留虚假/不受支持的引用硬性处罚。
+5. 除非复现官方 E5 设置，否则原始 Search-R1 论文数字只作为外部参考。
 
-### F-GRPO-004: markdown citation parser undercounted labels with nested brackets
+### F-GRPO-004：markdown 引用解析器没有计数带嵌套括号的标签
 
-Date: 2026-05-18
+日期：2026-05-18
 
-Expectation:
+预期标准：
 
 ```text
-Any answer link in the form [label](URL) should count as one markdown citation
-if URL is syntactically valid, even when the label contains ordinary bracketed
-text such as a year.
+任何形如 [label](URL) 的答案链接，只要 URL 语法有效，就应该计为一个 markdown citation，
+即使 label 里包含年份这类普通 bracket 文本。
 ```
 
-Observed during the markdown-cap smoke:
+在扣分上限 smoke 期间观察到：
 
 ```text
 [NCDAS: Substance Abuse and Addiction Statistics [2025]](https://drugabusestatistics.org)
 ```
 
-was reported as:
+被报告为：
 
 ```text
 citation_count = 0
 ```
 
-Root cause:
+根本原因：
 
 ```text
-deepfactcite/reward.py used a flat regex:
+deepfactcite/reward.py 使用了一个扁平正则：
 \[([^\[\]]+)\]\(([^()\s]+)\)
 
-That regex rejects link labels containing another '[' or ']'. It can also let
-the inner [2025] be treated as a bare bracket diagnostic if bare-bracket checks
-run on the unstripped answer.
+该正则会拒绝包含另一个 `[` 或 `]` 的链接 label。
+如果在未剥离合法链接的答案上运行 bare-bracket 检查，
+内部的 [2025] 还可能被当作裸 bracket 诊断。
 ```
 
-Fix:
+修复：
 
 ```text
-deepfactcite/reward.py now extracts markdown links with a small scanner that
-looks for a closing ] followed by (, so labels with bracketed years are counted.
-It also strips legal markdown links before bare-bracket and raw-URL checks.
+deepfactcite/reward.py 现在用一个小型扫描器抽取 markdown 链接：
+寻找后接 `(` 的闭合 `]`，因此带 bracket 年份的 label 也会被计数。
+它还会在 bare-bracket 和 raw-URL 检查前先剥离合法 markdown 链接。
 ```
 
-Validation:
+验证结果：
 
 ```text
-Nested-label citation:
+嵌套 label 引用：
 citation_count=1, raw_url_count=0, bare_citation_count=0
 
-Bare [S_1] plus raw URL:
+裸 [S_1] 加原始 URL：
 citation_count=0, raw_url_count=1, bare_citation_count=1
 ```
 
-Lesson:
+经验：
 
 ```text
-Reward parsers are part of the experiment. If they are too brittle, GRPO can be
-judged on parser artifacts rather than model behavior.
+Reward parser 也是实验的一部分。
+如果解析器太脆弱，GRPO 可能会被 parser artifact 而不是真实模型行为误判。
 ```
 
-### F-GRPO-005: first markdown-cap run stopped before the planned 16 steps
+### F-GRPO-005：第一次 markdown-cap 运行在计划的 16 步之前停止
 
-Date: 2026-05-18
+日期：2026-05-18
 
-Run:
+运行：
 
 ```text
 dfc-mixclean200-v2-onecite-markdowncap-20260518_2gpu
 ```
 
-Observed:
+观察结果：
 
 ```text
-rollout_data_step_1.jsonl through rollout_data_step_6.jsonl only
+只产生了 rollout_data_step_1.jsonl 到 rollout_data_step_6.jsonl
 no traceback / OOM / NCCL error in trainer log
 GPU idle after stop
 ```
 
-Partial aggregate:
+部分聚合结果：
 
 ```text
 samples=12
@@ -1192,26 +1146,26 @@ unsupported_citation_rate=0.5833
 citation_count=0.4167
 ```
 
-After recomputing diagnostics with the fixed parser:
+使用固定解析器重新计算诊断后：
 
 ```text
 url_validity=0.3333
 citation_count=0.5000
-no_citation failures changed from 7 to 6
+no_citation 失败数从 7 变为 6
 ```
 
-Decision:
+结论：
 
 ```text
-Do not treat this as a comparable 16-step training result. Keep it as debugging
-evidence for the parser issue and rerun a clean 16-step smoke.
+不要把它当成可比较的 16-step training result。
+只把它作为 parser 问题的调试证据，并重新跑一次干净的 16-step smoke。
 ```
 
-### S-GRPO-003: parser-fix markdown-cap rerun launched on v2 one-citation data
+### S-GRPO-003：对 v2 one-citation 数据启动 parser-fix markdown-cap 重跑
 
-Date: 2026-05-18
+日期：2026-05-18
 
-Run:
+运行：
 
 ```bash
 RUN_TAG=20260518_v2_markdowncap_parserfix2_2gpu \
@@ -1223,28 +1177,28 @@ GRPO_TOTAL_STEPS=16 \
 bash scripts/deepfactcite/run_sglang_grpo_ablation_2gpu.sh
 ```
 
-Launch validation:
+启动验证：
 
 ```text
-SGLang/GRPO reached async rollout.
-SearchQAVerlTool initialized with the v2 one-citation offline corpus.
-rollout_data_step_1.jsonl was created.
+SGLang/GRPO 已进入 async rollout。
+SearchQAVerlTool 已使用 v2 one-citation 离线语料初始化。
+rollout_data_step_1.jsonl 已创建。
 save_freq=0.
 ```
 
-Acceptance criteria:
+验收标准：
 
 ```text
 no_citation < 9/32
 claim_support > 0.3906
 unsupported_citation_rate <= 0.3750
-search remains near 1.0
-response clip ratio remains 0.0
+search 保持接近 1.0
+response clip ratio 保持 0.0
 ```
 
-Decision pending:
+待决
 
 ```text
-If accepted, clean disk and run a saved 2-GPU checkpoint experiment. If rejected,
-stay on 2 GPUs and improve prompt/data/reward before any 4-GPU scale-up.
+如果验收通过，先清理磁盘，再运行一次会保存 checkpoint 的 2-GPU 实验。
+如果被拒绝，继续留在 2-GPU，先改进 prompt/data/reward，再考虑任何 4-GPU 扩展。
 ```

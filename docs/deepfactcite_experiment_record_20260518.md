@@ -1,61 +1,57 @@
-# DeepFactCite Experiment Record
+# DeepFactCite 实验记录
 
-Date: 2026-05-18
+日期：2026-05-18
 
-## Project Goal
+## 项目目标
 
-Build a Search-R1-style search agent that preserves answer/search behavior
-while improving citation authenticity and claim-level support.
+构建一个 Search-R1 风格的搜索智能体：在保留答案/搜索行为的同时，提高引用真实性和声明级支持。
 
-The project is evaluated on two axes:
+该项目在两个轴上进行评估：
 
-1. answer/search guardrail: the model must not collapse on ShortQA or
-   NQ/HotpotQA-style Search-R1 BM25 evaluation;
-2. citation quality: cited URLs must come from retrieved evidence, and the
-   cited local claim must be supported by the corresponding snippet.
+1. answer/search 防护评测：模型不能在 ShortQA 或 NQ/HotpotQA 风格的 Search-R1 BM25 评测上崩掉；
+2. 引用质量：被引用的 URL 必须来自检索证据，并且被引用的局部声明必须由对应片段支持。
 
-The core experimental question for GRPO is:
+GRPO 的核心实验问题是：
 
 ```text
-Does citation-aware reward improve URL validity, citation precision, claim
-support, and unsupported citation rate compared with outcome-only reward on the
-same data, model, retriever, and rollout stack?
+在相同数据、模型、检索器和 rollout 栈下，
+citation-aware reward 相比 outcome-only reward，
+是否能提高 URL validity、citation precision、claim support，
+并降低 unsupported citation rate？
 ```
 
-## Current Constraints
+## 当前约束
 
-Hardware:
+硬件：
 
 ```text
 2 x A800 80G currently allocated in this workspace
 ```
 
-Storage:
+存储：
 
 ```text
-/root/autodl-tmp has about 14G free
+/root/autodl-tmp 大约有 14G 可用空间
 ```
 
-Operational constraints:
+操作约束：
 
 ```text
-Do not save full checkpoints until disk cleanup is done.
-Use save_freq=0 for smoke/ablation runs.
-Do not start long GRPO until short ablation produces useful signal.
+磁盘清理完成前，不保存完整 checkpoint。
+smoke/ablation run 使用 save_freq=0。
+短消融产生有用信号之前，不启动长 GRPO。
 ```
 
-## External Positioning
+## 外部定位
 
-This is not framed as "beating Search-R1" unless the original model/retriever
-setup is reproduced. The defensible positioning is:
+除非复现了原始模型/检索器设置，否则本项目不应被表述为“击败 Search-R1”。更可辩护的定位是：
 
 ```text
-DeepFactCite extends a Search-R1-style RL search agent with citation
-authenticity and claim-support rewards, then tests those rewards against an
-outcome-only baseline under the same backbone, data, and retriever.
+DeepFactCite 在 Search-R1 风格 RL 搜索智能体上增加引用真实性和声明支持奖励，
+并在相同 backbone、数据和检索器下，把这些奖励与 outcome-only baseline 对比。
 ```
 
-Reference anchors:
+参考锚点：
 
 ```text
 Search-R1: https://arxiv.org/abs/2503.09516
@@ -64,41 +60,40 @@ Correctness vs attribution faithfulness: https://arxiv.org/abs/2412.18004
 OpenAI Deep Research system card: https://openai.com/index/deep-research-system-card/
 ```
 
-## How to Read This Record
+## 如何阅读此记录
 
-This project has three layers. A beginner-friendly way to read every experiment
-is:
+这个项目分为三层。对新手来说，阅读每个实验时都可以问三个问题：
 
 ```text
-1. Can the model answer and search correctly?
-2. If it cites sources, are the URLs real retrieved URLs?
-3. Does each cited local claim actually follow from the cited snippet?
+1. 模型能否正确回答并搜索？
+2. 如果它引用来源，URL 是否真的是检索返回的 URL？
+3. 每个被引用的局部声明，是否真的能从被引用片段推出？
 ```
 
-Important terms:
+重要术语：
 
-| Term | Meaning in this project | Why it matters |
+| Term | 在此项目中的含义 | 为什么重要 |
 |---|---|---|
-| SFT | Supervised fine-tuning on example search/citation traces | Teaches the model the behavior pattern before RL |
-| GRPO | RL training where several sampled answers are compared by reward | Lets reward push behavior that SFT alone does not reliably learn |
-| Rollout | One complete agent trajectory: prompt, search calls, snippets, final answer | The unit we inspect when debugging |
-| Retriever | The offline search component that returns snippets/URLs | Citation can only be trusted if it cites retrieved evidence |
-| URL validity | Whether cited URLs come from retrieved evidence, not hallucinated links | Prevents fake or unrelated citations |
-| Citation precision | Fraction of citations that are valid and locally useful | Penalizes excessive or low-quality citation |
-| Claim support | Whether the cited snippet clearly supports the nearby claim | Measures attribution faithfulness, not just link existence |
-| Unsupported rate | Fraction of cited claims not supported by their cited snippets | The main failure mode this project tries to reduce |
+| SFT | 在示例搜索/引用轨迹上做监督微调 | 在 RL 之前先教会模型基本行为模式 |
+| GRPO | 一种 RL 训练方式，用 reward 比较多个采样答案 | 让 reward 推动那些单靠 SFT 不一定稳定学到的行为 |
+| Rollout | 一条完整智能体轨迹：prompt、搜索调用、片段、最终答案 | 调试时检查的基本单元 |
+| Retriever | 返回片段/URL 的离线搜索组件 | 只有引用检索证据，引用才可信 |
+| URL validity | 被引用 URL 是否来自检索证据，而不是幻觉链接 | 防止虚假或不相关引用 |
+| Citation precision | 有效且局部有用的引用比例 | 惩罚过度引用或低质量引用 |
+| Claim support | 被引用片段是否明确支持附近声明 | 衡量归因忠实性，而不只是链接是否存在 |
+| Unsupported rate | 被引用片段不支持其声明的比例 | 本项目试图降低的主要失败模式 |
 
-The most important engineering principle is:
+最重要的工程原理是：
 
 ```text
-Do not scale GPU because a run completed. Scale only when the run isolates a
-question, records failure modes, and improves the metric it was designed to
-improve without breaking the guardrail metrics.
+不要因为一次 run 跑完了就扩大 GPU 规模。
+只有当这次 run 隔离了问题、记录了失败模式，并且在不破坏防护指标的情况下
+改善了它本来要改善的指标，才值得扩容。
 ```
 
-## Stage 1: Data and SFT Baseline
+## 阶段1：数据和SFT基线
 
-Prepared DeepFactCite-style SFT/RL data from DeepCiteFact traces:
+从 DeepCiteFact 轨迹准备 DeepFactCite 风格 SFT/RL 数据：
 
 ```text
 data/deepfactcite/sft/train.parquet
@@ -107,122 +102,119 @@ data/deepfactcite/rl/train.parquet
 data/deepfactcite/rl/test.parquet
 ```
 
-Strict SFT filtering kept only traces with retrieved URLs and non-trivial
-claim-support:
+Strict SFT 过滤只保留带检索 URL 且有非平凡 claim-support 的轨迹：
 
 ```text
 data/deepfactcite_strict/sft/train.parquet
 data/deepfactcite_strict/sft/test.parquet
 ```
 
-Key lesson:
+关键经验：
 
 ```text
-Strict filtering alone did not automatically beat Soft SFT. Cleaner citation
-data can reduce diversity and must be evaluated against answer/search
-guardrails before promotion.
+仅靠 strict filtering 并不会自动击败 Soft SFT。
+更干净的引用数据可能降低多样性，因此晋升前必须用 answer/search 防护评测检查。
 ```
 
-Beginner explanation:
+初学者说明：
 
 ```text
-"Cleaner data" is not automatically better training data. If filtering removes
-many varied examples, the model may see fewer ways to answer/search. That can
-hurt general behavior even if the remaining examples have nicer citations.
-The right test is therefore not "does the dataset look clean", but "does a
-model trained on it beat the old model on the same evaluation path".
+“更干净的数据”不自动等于“更好的训练数据”。
+如果过滤掉大量多样化样例，模型看到的回答/搜索方式会更少。
+即使剩余样例的引用更漂亮，通用行为也可能变差。
+所以正确测试不是“数据集看起来是否干净”，而是
+“在同一评测路径下，用它训练出的模型是否击败旧模型”。
 ```
 
-The current SFT baseline is MixClean200:
+当前 SFT baseline 是 MixClean200：
 
 ```text
 outputs/deepfactcite/deepfactcite-sft-qwen3-8b-lora-mix-clean-200/global_step_200
 outputs/deepfactcite/deepfactcite-sft-qwen3-8b-lora-mix-clean-200-merged-bf16
 ```
 
-Training script:
+训练脚本：
 
 ```text
 scripts/deepfactcite/launch_mix_clean_sft_200.sh
 ```
 
-Primary report:
+主要报告：
 
 ```text
 reports/deepfactcite_mixclean200_eval_summary.md
 ```
 
-## Stage 2: Baseline Evaluation
+## 第2阶段：基线评估
 
-MixClean200 was evaluated against Base and Soft100 under the same vLLM
-dynamic-LoRA serving path.
+MixClean200 与 Base、Soft100 在相同 vLLM dynamic-LoRA serving path 下评测。
 
-ShortQA32:
+ShortQA32：
 
-| Model | Answer subEM | URL Validity | Claim Support | Unsupported |
+| 模型 | 答案 subEM | URL 有效性 | 声明支持度 | 不支持 |
 |---|---:|---:|---:|---:|
 | Base | 0.219 | 0.031 | 0.031 | 0.906 |
 | Soft100 | 0.438 | 0.812 | 0.292 | 0.557 |
 | MixClean200 | 0.500 | 0.969 | 0.333 | 0.495 |
 
-Search-R1 BM25 200:
+Search-R1 BM25 200：
 
-| Model | subEM | Search Success | Search Turns | Budget Fail |
+| 模型 | subEM | 搜索成功 | 搜索轮数 | 预算失败 |
 |---|---:|---:|---:|---:|
 | Base | 0.290 | 0.960 | 1.720 | 0.170 |
 | Soft100 | 0.450 | 0.990 | 1.195 | 0.045 |
 | MixClean200 | 0.490 | 1.000 | 1.160 | 0.025 |
 
-Decision:
+结论：
 
 ```text
-Use MixClean200 as the SFT initialization for GRPO.
-Do not claim final credible-citation success from SFT alone.
+使用 MixClean200 作为 GRPO 的 SFT 初始化。
+不要仅凭 SFT 就宣称最终实现了可信引用。
 ```
 
-Why this matters:
+为何重要：
 
 ```text
-SFT successfully taught the model to search and cite more often, but it did not
-fully teach the stricter behavior "only cite claims supported by retrieved
-snippets". This is exactly the gap GRPO reward should target.
+SFT 成功教会模型更频繁地搜索和引用，
+但还没有完全教会更严格的行为：“只引用检索片段支持的声明”。
+这正是 GRPO reward 应该瞄准的缺口。
 ```
 
-## Stage 3: GRPO Backend and Reward Plumbing
+## 第3阶段：GRPO 后端和奖励管道
 
-Problem found:
+发现的问题：
 
 ```text
-The old SGLang backend's reward_manager=custom did not necessarily call the
-new DeepFactCite reward function even when custom_reward_function.path was set.
+旧 SGLang backend 的 reward_manager=custom 不一定会调用新的 DeepFactCite reward function，
+即使已经设置 custom_reward_function.path。
 ```
 
-Fix:
+修复：
 
 ```text
-Register reward_manager=deepfactcite_custom via:
+通过下面文件注册 reward_manager=deepfactcite_custom：
 scripts/deepfactcite/verl_deepfactcite_reward.py
 ```
 
-Verified in logs:
+已验证日志：
 
 ```text
 reward_model.reward_manager = deepfactcite_custom
 custom_reward_function.path = scripts/deepfactcite/verl_deepfactcite_reward.py
-rollout JSONL includes url_validity, citation_precision, claim_support,
+rollout JSONL 包含 url_validity、citation_precision、claim_support、
 unsupported_citation_rate
 ```
 
-## Stage 4: 2-GPU Retrieval-Hit GRPO Smoke
+## 第4阶段：2-GPU 检索命中 GRPO smoke
 
-Purpose:
+目的：
 
 ```text
-Validate 2-GPU Qwen3-8B SGLang GRPO, DeepFactCite reward, offline retrieval,
-and rollout logging before spending longer GPU time.
+在投入更长 GPU 时间之前，验证 2-GPU Qwen3-8B SGLang GRPO、
+DeepFactCite reward、离线检索和 rollout 日志记录链路。
 ```
 
-Run:
+运行：
 
 ```text
 data/deepfactcite_sglang_grpo_retrieval_hit/train.parquet
@@ -230,7 +222,7 @@ logs/grpo_mixclean200_2gpu_hit_smoke_retry.log
 logs/grpo/rollouts/mixclean200_2gpu_hit_smoke/
 ```
 
-Settings:
+设置：
 
 ```text
 TP=2
@@ -243,224 +235,214 @@ max_response_length=384
 save_freq=0
 ```
 
-Result over 32 sampled trajectories:
+32 条采样轨迹上的结果：
 
-| Metric | Value |
+| 指标 | 值 |
 |---|---:|
 | reward | 0.218 |
 | search | 0.938 |
-| URL validity | 0.594 |
-| citation precision | 0.126 |
-| claim support | 0.122 |
-| unsupported citation rate | 0.755 |
+| URL 有效性 | 0.594 |
+| 引用精确度 | 0.126 |
+| 声明支持 | 0.122 |
+| 不支持的引用率 | 0.755 |
 
-Interpretation:
+解释：
 
 ```text
-The engineering chain works. The bottleneck is not SGLang plumbing; it is
-evidence/claim quality. Retrieval-hit at query level is insufficient because
-models still write broader claims than the snippets support.
+工程链路可以跑通。瓶颈不是 SGLang plumbing，而是 evidence/claim 质量。
+query 级 retrieval-hit 还不够，因为模型仍然会写出比片段支持范围更宽的声明。
 ```
 
-Failure analysis:
+失败分析：
 
 ```text
-This was a successful systems smoke test but a failed citation-quality result.
-The model usually searched, and many cited URLs were real retrieved URLs, but
-the answer sentences often made claims broader than the snippet. Example pattern:
-a snippet supports "X happened in 2012", while the answer says "X changed the
-whole organization from 2010 to 2013". The URL is not fake, but the cited claim
-is still not supported.
+这是一次成功的系统 smoke test，但引用质量结果失败。
+模型通常会搜索，很多被引用 URL 也确实来自检索结果；
+但答案句子经常提出比片段支持范围更宽的声明。
+典型模式是：片段只支持“X 发生在 2012 年”，答案却说“X 在 2010 到 2013 年改变了整个组织”。
+URL 不是假的，但被引用声明仍然没有被支持。
 ```
 
-Lesson:
+经验： 
 
 ```text
-Query-level retrieval hit is too weak for citation RL. The data must be filtered
-at claim level: short answer, few citations, retrieved URLs only, and cited
-claim explicitly supported by the snippet.
+query 级 retrieval hit 对引用 RL 来说太弱。
+数据必须在 claim 级过滤：短答案、少量引用、只允许检索返回的 URL，
+并且被引用声明必须被片段明确支持。
 ```
 
-Decision:
+结论
 
 ```text
-Build claim-level support-filtered GRPO data before longer runs.
+在更长训练前，先构建 claim-level support-filtered GRPO 数据。
 ```
 
-## Failure Ledger in Plain Language
+## 简单语言的失败台账
 
-This section explains the earlier failed or non-winning experiments in a form
-that can be checked by someone new to the project.
+本节用更直白的方式解释先前失败或未获胜的实验，方便新接手项目的人检查。
 
-### Failure 1: Strict SFT was cleaner but not better
+### 失败1：严格SFT更干净，但效果不佳
 
-What we tried:
+我们尝试的方法：
 
 ```text
-Train on stricter SFT examples with better URL/support properties.
+在 URL/support 属性更好的严格 SFT 样例上训练。
 ```
 
-What happened:
+发生了什么：
 
 ```text
-Strict SFT did not beat Soft SFT on the same eval path. It was not promoted.
+Strict SFT 在相同 eval path 下没有击败 Soft SFT，因此没有被提升。
 ```
 
-Why it likely failed:
+它可能失败的原因：
 
 ```text
-The filter improved data cleanliness but reduced diversity. A search agent needs
-to learn not only citation formatting, but also when to search, how to phrase
-queries, and how to answer varied questions. Over-filtering can make that
-behavior narrower.
+过滤提高了数据干净程度，但降低了多样性。搜索智能体不仅要学习引用格式，
+还要学习什么时候搜索、如何组织查询、如何回答不同问题。
+过度过滤会让这些行为变窄。
 ```
 
-Technical value:
+技术价值
 
 ```text
-It established that dataset quality must be measured by downstream guardrail
-metrics, not by filter strictness alone.
+它证明了数据集质量必须由下游防护评测指标衡量，
+不能只看过滤规则有多严格。
 ```
 
-### Failure 2: bf16 LoRA merge changed the model
+### 失败2：bf16 LoRA 合并改变了模型
 
-What we tried:
+我们尝试的方法：
 
 ```text
-Merge a LoRA adapter into the base model and use the merged full model as if it
-were equivalent to dynamic LoRA serving.
+把 LoRA adapter 合并进 base model，并把 merged full model 当作等价于 dynamic LoRA serving 来使用。
 ```
 
-What happened:
+发生了什么：
 
 ```text
-HF logits showed large differences between PEFT dynamic LoRA and the saved bf16
-merged model, even though the saved model was internally self-consistent.
+HF logits 显示，PEFT dynamic LoRA 与保存的 bf16 merged model 之间存在很大差异，
+即使保存后的模型内部是自洽的。
 ```
 
-Why it failed:
+失败的原因：
 
 ```text
-LoRA deltas were effectively added into bf16 base weights during merge. That
-can lose numerical detail. In a closed-loop search agent, small token changes
-can cause different search queries, which then change retrieved evidence and
-final metrics.
+merge 过程中，LoRA delta 实际上被加进了 bf16 base weight。
+这会丢失数值细节。在闭环搜索智能体里，很小的 token 变化就可能导致不同搜索查询，
+进而改变检索证据和最终指标。
 ```
 
-Technical value:
+技术价值
 
 ```text
-Serving path is part of model identity. Dynamic LoRA, bf16 merged, and fp32
-merged results must not be mixed in one baseline table unless explicitly labeled.
+Serving path 是模型身份的一部分。除非明确标注，
+否则 dynamic LoRA、bf16 merged 和 fp32 merged 的结果不能混在同一张 baseline 表里。
 ```
 
-### Failure 3: mix50 continuation used an invalid parent
+### 失败3：mix50 continuation 使用了无效 parent
 
-What we tried:
+我们尝试的方法：
 
 ```text
-Continue SFT for 50 steps from the old merged Soft parent.
+从旧 merged Soft parent 继续 SFT 50 步。
 ```
 
-What happened:
+发生了什么：
 
 ```text
-The run completed, but the parent was the lossy bf16 merged model from the
-previous failure. The result was worse and not a clean test of mix-data
-continuation.
+这次 run 完成了，但 parent 是上一个失败中的有损 bf16 merged model。
+结果更差，也不能干净地回答 mix-data continuation 是否有效。
 ```
 
-Why it failed:
+失败的原因：
 
 ```text
-The training data was not the only variable. The parent checkpoint had already
-changed behavior, so the experiment could not answer whether the continuation
-recipe itself was good.
+训练数据不是唯一变量。parent checkpoint 的行为已经发生变化，
+所以这个实验无法回答 continuation recipe 本身是否有效。
 ```
 
-Technical value:
+技术价值
 
 ```text
-Every training run needs explicit lineage: base model, adapter, merge dtype,
-serving path, and eval path.
+每次训练都需要明确 lineage：base model、adapter、merge dtype、serving path 和 eval path。
 ```
 
-### Failure 4: Strict47 answer metric was not meaningful
+### 失败4：Strict47 答案指标没有意义
 
-What we tried:
+我们尝试的方法：
 
 ```text
-Use DeepFactCite strict47 as a general answer-and-citation evaluation set.
+把 DeepFactCite strict47 当作通用答案与引用评测集使用。
 ```
 
-What happened:
+发生了什么：
 
 ```text
-The set has no gold answer field suitable for answer_subem. Its citation
-metrics are useful; its answer_subem is not.
+这个集合没有适合 answer_subem 的 gold answer 字段。
+它的引用指标有用，但 answer_subem 没有意义。
 ```
 
-Why it matters:
+为什么重要
 
 ```text
-An impressive-looking metric is useless if the dataset schema does not support
-that metric. This is why the project separates answer/search guardrails
-ShortQA/Search-R1 BM25 from citation-behavior evaluation strict47.
+如果数据集 schema 不支持某个指标，那么这个指标即使看起来漂亮也没有用。
+这就是为什么项目要把 answer/search 防护评测（ShortQA/Search-R1 BM25）
+和 citation-behavior 评测（strict47）分开。
 ```
 
-### Failure 5: Retrieval-hit GRPO did not solve support
+### 失败5：检索命中GRPO未解决支持问题
 
-What we tried:
+我们尝试的方法：
 
 ```text
-Give GRPO examples where retrieval could find the intended URL.
+给 GRPO 提供检索器能够找到目标 URL 的样例。
 ```
 
-What happened:
+发生了什么：
 
 ```text
-The 2-GPU stack ran, but claim support remained low and unsupported citation
-rate remained high.
+2-GPU 栈跑通了，但 claim support 仍然很低，unsupported citation rate 仍然很高。
 ```
 
-Why it failed:
+失败的原因：
 
 ```text
-Finding the right URL is not the same as making a supported claim. The model can
-cite a real URL while writing a sentence that the snippet does not prove.
+找到正确 URL 不等于写出了被支持的声明。
+模型可以引用真实 URL，同时写出片段并不能证明的句子。
 ```
 
-Technical value:
+技术价值
 
 ```text
-This failure justified the current claim-level support-filtered data build and
-the outcome-only vs citation-aware ablation.
+这个失败证明了当前 claim-level support-filtered 数据构建、
+以及 outcome-only vs citation-aware 消融是必要的。
 ```
 
-## Reusable Experiment Flow
+## 可重复使用的实验流程
 
-The process that should be reused for future experiments is:
+未来实验中应重复使用的过程是：
 
 ```text
-1. Fix the question: what single hypothesis is this run testing?
-2. Fix the model identity: base, adapter, merge dtype, serving path.
-3. Fix the data identity: train/test parquet, corpus path, retriever top-k.
-4. Run the smallest smoke that validates the full engineering path.
-5. Parse rollouts, not just stdout reward.
-6. Record both wins and failures.
-7. Scale only if the failure analysis says the next larger run is justified.
+1. 固定问题：这次 run 只测试哪一个假设？
+2. 固定模型身份：base、adapter、merge dtype、serving path。
+3. 固定数据身份：train/test parquet、corpus path、retriever top-k。
+4. 运行能验证完整工程路径的最小 smoke。
+5. 解析 rollouts，而不是只看 stdout reward。
+6. 同时记录成功和失败。
+7. 只有当失败分析说明下一次更大规模运行是合理的，才扩大规模。
 ```
 
 
-## Stage 5: Claim-Level Support-Filtered GRPO Data
+## 第5阶段：声明级支持过滤的GRPO数据
 
-Script:
+脚本 
 
 ```text
 scripts/deepfactcite/prepare_sglang_grpo_claim_filtered.py
 ```
 
-Command:
+命令：
 
 ```bash
 /root/autodl-tmp/conda_envs/searchr1-qwen3-sft/bin/python \
@@ -469,7 +451,7 @@ Command:
   --out-dir data/deepfactcite_sglang_grpo_claim_filtered
 ```
 
-Artifacts:
+工件：
 
 ```text
 data/deepfactcite_sglang_grpo_claim_filtered/train.parquet
@@ -480,25 +462,25 @@ data/deepfactcite_sglang_grpo_claim_filtered/preview.jsonl
 data/deepfactcite_sglang_grpo_claim_filtered/reject_samples.jsonl
 ```
 
-Build result:
+生成结果：
 
-| Item | Value |
+| 项目 | 数值 |
 |---|---:|
-| kept rows | 32 |
+| 保留行数 | 32 |
 | train/test | 28/4 |
-| corpus docs | 42 |
-| avg selected citations | 1.3125 |
-| min support score | 1.0 |
-| avg support score | 1.0 |
+| 语料库文档 | 42 |
+| 平均所选引用数 | 1.3125 |
+| 最小支持分 | 1.0 |
+| 平均支持分 | 1.0 |
 
-Reject reasons while collecting:
+收集时拒绝原因：
 
-| Reason | Count |
+| 原因 | 数量 |
 |---|---:|
 | weak_claim_support | 54 |
 | too_few_supported_claims | 5 |
 
-Retriever validation:
+检索器验证：
 
 ```text
 OfflineSearchTool, topk=2
@@ -506,32 +488,32 @@ train top-2 URL hit: 28/28
 test top-2 URL hit: 4/4
 ```
 
-Data filter rules:
+筛选规则
 
 ```text
-1-2 citations
-retrieved URL only
-no truncated/fake citation URL
+1-2 条引用
+只允许检索返回的 URL
+不允许截断或虚假的引用 URL
 claim support score >= 1.0
-claim length cap
-low-information citation fragments filtered
-prompt asks for 1-3 concise sentences
+声明长度上限
+过滤低信息量引用片段
+prompt 要求输出 1-3 个简洁句子
 ```
 
-## Stage 6: Outcome-Only vs Citation-Aware GRPO
+## 第6阶段：仅限结果与引用感知GRPO
 
-Entrypoint:
+入口点：
 
 ```text
 scripts/deepfactcite/run_sglang_grpo_ablation_2gpu.sh
 ```
 
-Common settings:
+常用设置
 
 ```text
 actor = outputs/deepfactcite/deepfactcite-sft-qwen3-8b-lora-mix-clean-200-merged-bf16
 data = data/deepfactcite_sglang_grpo_claim_filtered
-rollout backend = SGLang
+rollout 后端 = SGLang
 tensor parallel = 2
 rollout.n = 2
 train_batch_size = 1
@@ -543,9 +525,9 @@ save_freq = 0
 reward_manager = deepfactcite_custom
 ```
 
-Outcome-only reward:
+仅限结果的奖励：
 
-| Component | Weight |
+| 组件 | 权重 |
 |---|---:|
 | answer | 0.80 |
 | citation | 0.00 |
@@ -554,9 +536,9 @@ Outcome-only reward:
 | search | 0.10 |
 | cost | 0.05 |
 
-Citation-aware reward:
+引用感知奖励：
 
-| Component | Weight |
+| 组件 | 权重 |
 |---|---:|
 | answer | 0.15 |
 | citation | 0.35 |
@@ -565,7 +547,7 @@ Citation-aware reward:
 | search | 0.05 |
 | cost | 0.05 |
 
-Commands:
+命令：
 
 ```bash
 MODE=outcome-only DRY_RUN=0 GRPO_TOTAL_STEPS=16 \
@@ -575,7 +557,7 @@ MODE=citation-aware DRY_RUN=0 GRPO_TOTAL_STEPS=16 \
   bash scripts/deepfactcite/run_sglang_grpo_ablation_2gpu.sh
 ```
 
-Completed runs:
+已完成的运行：
 
 ```text
 MODE=outcome-only
@@ -589,87 +571,85 @@ log=logs/dfc-mixclean200-claimfiltered-citation-aware-20260518_claimfiltered_2gp
 rollouts=logs/grpo/rollouts/dfc-mixclean200-claimfiltered-citation-aware-20260518_claimfiltered_2gpu/
 ```
 
-Startup verification:
+启动验证：
 
 ```text
-Hydra config passed validation.
+Hydra config 校验通过。
 reward_manager=deepfactcite_custom.
-Reward function loaded from scripts/deepfactcite/verl_deepfactcite_reward.py.
-Dataset len = 28 train, 4 val.
-Total training steps = 16.
-Offline retriever uses data/deepfactcite_sglang_grpo_claim_filtered/corpus.jsonl.
-SGLang backend initialized on CUDA_VISIBLE_DEVICES=0,1.
-Checkpoint saving disabled.
+reward function 已从 scripts/deepfactcite/verl_deepfactcite_reward.py 加载。
+数据集规模 = 28 train, 4 val。
+总训练步数 = 16。
+离线检索器使用 data/deepfactcite_sglang_grpo_claim_filtered/corpus.jsonl。
+SGLang 后端已在 CUDA_VISIBLE_DEVICES=0,1 上初始化。
+checkpoint 保存已关闭。
 ```
 
-Result:
+结果：
 
-| Metric | Outcome-Only | Citation-Aware | Readout |
+| 指标 | Outcome-Only | Citation-Aware | 解读 |
 |---|---:|---:|---|
-| samples | 32 | 32 | same budget |
-| search | 1.0000 | 1.0000 | search did not collapse |
-| format | 0.9812 | 0.9750 | both high |
-| answer_subem | 0.0000 | 0.0312 | citation-aware slightly higher, but tiny sample |
-| URL validity | 0.7656 | 0.6979 | citation-aware worse |
-| citation precision | 0.4219 | 0.3828 | citation-aware worse |
-| claim support | 0.4219 | 0.3828 | citation-aware worse |
-| unsupported citation rate | 0.4219 | 0.4844 | citation-aware worse |
-| fake URL rate | 0.0469 | 0.0521 | citation-aware worse |
-| citation count | 1.0625 | 1.0000 | similar |
-| mean step response clip ratio | 0.1563 | 0.2813 | citation-aware worse |
+| samples | 32 | 32 | 预算相同 |
+| search | 1.0000 | 1.0000 | 搜索未收起 |
+| format | 0.9812 | 0.9750 | 都很高 |
+| answer_subem | 0.0000 | 0.0312 | 引用感知略高，但样本量很小 |
+| URL 有效性 | 0.7656 | 0.6979 | 引用感知更差 |
+| 引用精确度 | 0.4219 | 0.3828 | 引用感知更差 |
+| 声明支持 | 0.4219 | 0.3828 | 引用感知更差 |
+| 不支持的引用率 | 0.4219 | 0.4844 | 引用感知更差 |
+| 虚假 URL 率 | 0.0469 | 0.0521 | 引用感知更差 |
+| 引用计数 | 1.0625 | 1.0000 | 相近 |
+| 平均步长响应剪辑比 | 0.1563 | 0.2813 | 引用感知更差 |
 
-Read this table carefully:
-
-```text
-The citation-aware reward number itself is higher, but reward numbers are not
-directly comparable across modes because the weights are different. The fair
-comparison is URL validity, citation precision, claim support, unsupported rate,
-search, format, and answer guardrails. On those metrics, v1 citation-aware did
-not win.
-```
-
-Failure analysis:
+请仔细阅读此表：
 
 ```text
-The v1 claim-filtered data guarantees that one selected claim is supported by a
-snippet, but some original user questions are broader than the selected claim.
-The model often answers the broad question anyway, adds extra background, then
-places the citation after a sentence that the snippet does not fully prove.
-This makes the URL real but the cited local claim unsupported.
+citation-aware 的 reward 数字本身更高，但不同模式的 reward 权重不同，
+所以 reward 数字不能直接横向比较。公平对比应该看 URL validity、
+citation precision、claim support、unsupported rate、search、format 和 answer 防护评测。
+按这些指标看，v1 citation-aware 没有获胜。
 ```
 
-Decision:
+故障分析
 
 ```text
-Do not switch to 4 GPUs from this result.
-Do not run a longer GRPO on the same v1 data.
-Build and test a stricter one-claim / one-citation dataset first.
+v1 claim-filtered 数据只保证某个选中的声明被片段支持，
+但有些原始用户问题比这个选中声明更宽。
+模型经常仍然回答宽问题，额外添加背景信息，
+然后把引用放在一个片段并不能完全证明的句子后面。
+这会让 URL 真实，但被引用的局部声明仍然不受支持。
 ```
 
-Follow-up report:
+结论
+
+```text
+不要基于这个结果切到 4 GPU。
+不要在同一份 v1 数据上跑更长 GRPO。
+先构建并测试更严格的 one-claim / one-citation 数据集。
+```
+
+后续报告：
 
 ```text
 reports/deepfactcite_claimfiltered_grpo_ablation_2gpu_20260518.md
 ```
 
-## Stage 7: One-Claim / One-Citation Repair
+## 第7阶段：单声明/单引用修复
 
-Reason:
+原因：
 
 ```text
-The v1 failure is not "citation-aware reward is useless"; it is "the current
-data and prompt still let the model over-answer broad questions." The repair is
-to make the next dataset narrower so the supported behavior is easier to learn
-and easier to measure.
+v1 的失败并不是“citation-aware reward 没用”，而是“当前数据和 prompt
+仍然允许模型过度回答宽问题”。修复方向是让下一版数据更窄，
+使被支持的行为更容易学习，也更容易衡量。
 ```
 
-Script updated:
+脚本已更新
 
 ```text
 scripts/deepfactcite/prepare_sglang_grpo_claim_filtered.py
 ```
 
-New filters/options:
+新筛选条件/选项：
 
 ```text
 max_citations = 1
@@ -679,7 +659,7 @@ max_answer_sentences = 1
 strict_one_citation_prompt = true
 ```
 
-Command:
+命令：
 
 ```bash
 /root/autodl-tmp/conda_envs/searchr1-qwen3-sft/bin/python \
@@ -693,27 +673,27 @@ Command:
   --strict-one-citation-prompt
 ```
 
-Build result:
+生成结果：
 
-| Item | Value |
+| 项目 | 数值 |
 |---|---:|
-| kept rows | 32 |
+| 保留行数 | 32 |
 | train/test | 28/4 |
-| corpus docs | 32 |
-| avg selected citations | 1.0000 |
-| min support score | 1.0000 |
-| avg support score | 1.0000 |
+| 语料库文档 | 32 |
+| 平均所选引用数 | 1.0000 |
+| 最小支持分 | 1.0000 |
+| 平均支持分 | 1.0000 |
 
-Reject reasons:
+拒绝原因：
 
-| Reason | Count |
+| 原因 | 数量 |
 |---|---:|
 | weak_claim_support | 43 |
 | query_too_broad | 19 |
 | too_few_supported_claims | 3 |
 | claim_too_broad | 1 |
 
-Retriever validation:
+检索器验证：
 
 ```text
 OfflineSearchTool, topk=2
@@ -721,7 +701,7 @@ train top-2 URL hit: 28/28
 test top-2 URL hit: 4/4
 ```
 
-Next small run:
+下一次小规模运行：
 
 ```bash
 RUN_TAG=20260518_v2_onecite_2gpu \
@@ -732,16 +712,15 @@ GRPO_TOTAL_STEPS=16 \
 bash scripts/deepfactcite/run_sglang_grpo_ablation_2gpu.sh
 ```
 
-Success standard for this repair run:
+此维修运行的成功标准：
 
 ```text
-It does not need to prove final superiority. It should show whether stricter
-one-claim data reduces no-citation, fake URL, response clipping, and unsupported
-claim behavior enough to justify a fair v2 outcome-only vs citation-aware
-ablation.
+这次修复运行不需要证明最终优越性。它应该说明更严格的 one-claim 数据
+是否能减少 no-citation、fake URL、response clipping 和 unsupported claim 行为，
+从而支撑一次公平的 v2 outcome-only vs citation-aware 消融。
 ```
 
-Completed v2 runs:
+已完成 v2 运行：
 
 ```text
 v2 citation-aware:
@@ -757,69 +736,67 @@ logs/grpo/rollouts/dfc-mixclean200-v2-onecite-citation-strong-20260518_2gpu/
 reports/dfc_mixclean200_v2_onecite_citation_strong_2gpu_rollout_summary.md
 ```
 
-Fair v2 ablation result:
+公平 v2 消融结果：
 
-| Metric | Outcome-Only | Citation-Aware | Readout |
+| 指标 | Outcome-Only | Citation-Aware | 解读 |
 |---|---:|---:|---|
-| search | 0.9688 | 1.0000 | citation-aware preserved search |
-| format | 0.9812 | 0.9625 | both usable |
-| URL validity | 0.1562 | 0.7188 | citation-aware much better |
-| citation precision | 0.1125 | 0.3937 | citation-aware much better |
-| claim support | 0.1094 | 0.3906 | citation-aware much better |
-| unsupported citation rate | 0.8438 | 0.3750 | citation-aware much better |
-| fake URL rate | 0.0000 | 0.0000 | v2 fixed fake URLs in both |
-| citation count | 0.1562 | 0.7188 | citation-aware cites far more |
-| response clip ratio | 0.0000 | 0.0000 | v2 fixed truncation |
-| no_citation failures | 27 | 9 | citation-aware much better |
+| search | 0.9688 | 1.0000 | 引用感知保留搜索 |
+| format | 0.9812 | 0.9625 | 都可以使用 |
+| URL 有效性 | 0.1562 | 0.7188 | 引用感知能力更强 |
+| 引用精确度 | 0.1125 | 0.3937 | 引用感知能力更强 |
+| 声明支持 | 0.1094 | 0.3906 | 引用感知能力更强 |
+| 不支持的引用率 | 0.8438 | 0.3750 | 引用感知能力更强 |
+| 虚假 URL 率 | 0.0000 | 0.0000 | v2 中两者都没有虚假 URL |
+| 引用计数 | 0.1562 | 0.7188 | 引用感知引用更多 |
+| 响应剪辑比率 | 0.0000 | 0.0000 | v2固定截断 |
+| no_citation 失败 | 27 | 9 | 引用感知能力更强 |
 
-This is the first clean positive GRPO signal in this stage:
+这是本阶段第一个干净的正向 GRPO 信号：
 
 ```text
-On the same v2 one-citation data, explicit citation/support reward greatly
-improves citation behavior over outcome-only reward while preserving search and
-removing response clipping.
+在同一份 v2 one-citation 数据上，显式 citation/support reward 相比 outcome-only reward
+显著改善了引用行为，同时保持搜索行为并消除了 response clipping。
 ```
 
-Citation-strong follow-up:
+Citation-Strong 后续实验：
 
-| Metric | v2 Citation-Aware | v2 Citation-Strong |
+| 指标 | v2 引用感知 | v2 Citation-Strong |
 |---|---:|---:|
 | search | 1.0000 | 1.0000 |
 | format | 0.9625 | 0.9812 |
-| URL validity | 0.7188 | 0.7188 |
-| citation precision | 0.3937 | 0.4219 |
-| claim support | 0.3906 | 0.4219 |
-| unsupported citation rate | 0.3750 | 0.4375 |
-| no_citation failures | 9 | 9 |
-| response clip ratio | 0.0000 | 0.0000 |
+| URL 有效性 | 0.7188 | 0.7188 |
+| 引用精确度 | 0.3937 | 0.4219 |
+| 声明支持 | 0.3906 | 0.4219 |
+| 不支持的引用率 | 0.3750 | 0.4375 |
+| no_citation 失败 | 9 | 9 |
+| 响应剪辑比率 | 0.0000 | 0.0000 |
 
-Interpretation:
-
-```text
-Stronger citation/support weights improved average support but did not reduce
-no_citation and worsened unsupported rate. Scalar weight tuning alone is not the
-clean next fix.
-```
-
-Updated decision:
+解释：
 
 ```text
-Do not move to 4 GPUs yet.
-Do not run another longer blind GRPO.
-The next engineering task is to patch reward/prompt handling for exact markdown
-URL citation presence: penalize no citation, bare [S_xxx], bare [1], and raw
-URLs that are not markdown links.
+更强的 citation/support 权重提高了平均 support，
+但没有减少 no_citation，反而让 unsupported rate 变差。
+单纯调标量权重不是下一步最干净的修复。
 ```
 
-Detailed report:
+更新后的决定：
+
+```text
+暂时不要上 4 GPU。
+不要再盲目跑更长 GRPO。
+下一步工程任务是修补 reward/prompt 对精确 markdown URL 引用存在性的处理：
+惩罚 no citation、裸 `[S_xxx]`、裸 `[1]`，以及不是 markdown link 的原始 URL。
+```
+
+详细报告
 
 ```text
 reports/deepfactcite_v2_onecite_grpo_ablation_2gpu_20260518.md
 ```
 
-## Metrics to Report
+## 要报告的指标
 
-Primary citation metrics:
+主要引用指标：
 
 ```text
 url_validity
@@ -830,7 +807,7 @@ fake_url_rate
 citation_count
 ```
 
-Guardrail metrics:
+护栏指标：
 
 ```text
 answer_subem / target subEM
@@ -838,10 +815,10 @@ format
 search
 search turns
 response_length clip ratio
-no-search and no-citation failures
+no-search 与 no-citation 失败
 ```
 
-Summarizer:
+摘要生成器：
 
 ```bash
 /root/autodl-tmp/conda_envs/searchr1-qwen3-sft/bin/python \
@@ -850,99 +827,95 @@ Summarizer:
   --out reports/<run_name>_rollout_summary.md
 ```
 
-## Promotion Rules
+## 扩展规则
 
-Move to longer or 4-GPU runs only if:
-
-```text
-1. citation-aware improves URL validity / claim support / unsupported rate
-   over outcome-only;
-2. answer/search behavior does not materially collapse;
-3. response truncation is not the dominant failure mode;
-4. disk cleanup is done before enabling checkpoint saves.
-```
-
-Stop or revise if:
+仅在以下情况下转到更长或 4-GPU 运行：
 
 ```text
-1. citation-aware only increases citation count but unsupported rate stays high;
-2. outcome-only wins answer/search while citation-aware collapses;
-3. rollout is dominated by no-search/no-citation format behavior;
-4. max_response_length=384 clips too many answers.
+1. citation-aware 相比 outcome-only 改善 URL validity、claim support 和 unsupported rate；
+2. answer/search 行为没有实质性崩塌；
+3. response truncation 不是主要失败模式；
+4. 启用 checkpoint 保存前已经完成磁盘清理。
 ```
 
-## Interview-Grade Narrative
-
-The strongest project narrative is:
+如果出现以下情况，请停止或修改：
 
 ```text
-I first established a reproducible SFT baseline and answer/search guardrail,
-then validated the 2-GPU SGLang GRPO engineering path. The first retrieval-hit
-smoke showed that backend plumbing worked but citation support stayed weak.
-Instead of scaling GPU blindly, I built claim-level support-filtered RL data,
-validated retriever top-k hits under the exact rollout retriever, and set up a
-controlled outcome-only vs citation-aware reward ablation. The result is a
-clean test of whether explicit citation authenticity and claim-support rewards
-improve attribution without sacrificing the Search-R1-style answer/search
-objective.
+1. citation-aware 只是增加引用数量，但 unsupported rate 仍然很高；
+2. outcome-only 在 answer/search 上获胜，而 citation-aware 崩掉；
+3. rollout 主要被 no-search/no-citation 格式问题支配；
+4. max_response_length=384 截断了太多答案。
 ```
 
-## Stage 8: Reward Parser and Markdown Citation Repair
+## 面试级叙述
 
-Why this stage exists:
+最有力的项目叙述是：
 
 ```text
-The fair v2 ablation showed a useful result: citation-aware GRPO improved URL
-validity, citation precision, claim support, unsupported rate, and no-citation
-count compared with outcome-only. But the result was not yet good enough to
-scale because citation-aware still had 9 no-citation failures out of 32 samples.
+我先建立了可复现的 SFT baseline 和 answer/search 防护评测，
+然后验证了 2-GPU SGLang GRPO 工程路径。第一次 retrieval-hit smoke 表明
+backend plumbing 能跑通，但 citation support 仍然很弱。
+我没有盲目扩大 GPU，而是构建了 claim-level support-filtered RL 数据，
+在真实 rollout 检索器下验证 retriever top-k 命中，并设置了受控的
+outcome-only vs citation-aware reward 消融。这个实验干净地检验了：
+显式 citation authenticity 和 claim-support reward 是否能在不牺牲
+Search-R1 风格 answer/search 目标的情况下改善 attribution。
 ```
 
-The naive next move would be to run longer or use more GPUs. We did not do that
-because the failure analysis pointed to a narrower issue:
+## 第8阶段：奖励解析器和扣分引用修复
+
+为什么存在此阶段：
 
 ```text
-The model often knows the answer and performs search, but it sometimes fails to
-emit an exact markdown URL citation in the final answer.
+公平 v2 消融给出了有价值的结果：与 outcome-only 相比，
+citation-aware GRPO 改善了 URL validity、citation precision、claim support、
+unsupported rate 和 no-citation count。但这个结果还不足以直接扩容，
+因为 citation-aware 在 32 个样本中仍有 9 个 no-citation 失败。
 ```
 
-That is a reward-specification problem, not just a capacity problem.
-
-### What Counts as a Valid Citation Here
-
-For this project, a citation is not merely a source-looking token. It must pass
-three checks:
+天真的下一步会是跑更久或使用更多 GPU。我们没有这样做，
+因为故障分析指出了一个更狭隘的问题：
 
 ```text
-1. Markdown form: [some label](https://retrieved-url)
-2. URL provenance: the URL must appear in the retrieved evidence for that rollout
-3. Claim support: the local claim near the citation must be supported by the
-   text snippet behind that URL
+模型经常知道答案，也会执行搜索，但有时没有在最终答案中输出严格的 markdown URL 引用。
 ```
 
-Examples:
+这是一个奖励指定问题，而不仅仅是容量问题。
+
+### 此处被视为有效引用的内容
+
+对于此项目，引用不仅仅是一个看起来像源的令牌。它必须通过
+三项检查：
 
 ```text
-Valid shape:
-The cave contains preserved figurative paintings [Chauvet Cave](https://example.org/chauvet).
-
-Invalid shape:
-The cave contains preserved figurative paintings [S_abc123].
-
-Invalid shape:
-The cave contains preserved figurative paintings [1].
-
-Invalid shape:
-The cave contains preserved figurative paintings https://example.org/chauvet.
+1. Markdown 形式：[some label](https://retrieved-url)
+2. URL 来源：URL 必须出现在该 rollout 的检索证据中
+3. 声明支持：引用附近的局部声明必须被该 URL 背后的文本片段支持
 ```
 
-The invalid shapes are common in model rollouts because the model sees snippet
-IDs and URLs in the tool output. If the reward accepts those loose forms, the
-model can appear to "cite" without learning the target attribution behavior.
+示例：
 
-### Reward/Pipeline Patch
+```text
+有效形式：
+该洞穴保存有人物形象绘画 [Chauvet Cave](https://example.org/chauvet)。
 
-Patched files:
+无效形式：
+该洞穴保存有人物形象绘画 [S_abc123]。
+
+无效形式：
+该洞穴保存有人物形象绘画 [1]。
+
+无效形式：
+该洞穴保存有人物形象绘画 https://example.org/chauvet。
+```
+
+无效形式在模型 rollout 中很常见，因为模型会在工具输出中看到片段 ID 和 URL。
+如果 reward 接受这些松散形式，
+模型可以在不学习目标归因行为的情况下显示为“引用”。
+
+### 奖励/渠道补丁
+
+修补文件：
 
 ```text
 deepfactcite/reward.py
@@ -951,63 +924,60 @@ scripts/deepfactcite/prepare_sglang_grpo_claim_filtered.py
 scripts/deepfactcite/summarize_grpo_rollouts.py
 ```
 
-Changes:
+变化：
 
 ```text
-1. citation-aware mode now sets DFC_REQUIRE_MARKDOWN_CITATION=true.
-2. outcome-only mode sets DFC_REQUIRE_MARKDOWN_CITATION=false, preserving the
-   ablation boundary.
-3. If retrieved evidence exists but the final answer has no markdown URL
-   citation, reward is capped at 0.08.
-4. If the answer uses a bare bracket citation or raw URL outside markdown,
-   reward is capped at 0.12.
-5. The v2 prompt now asks for exactly one short sentence and exactly one
-   markdown URL citation copied from retrieved evidence.
-6. The rollout summarizer can recompute diagnostic details with the current
-   reward code using --recompute-details while preserving the logged reward.
+1. citation-aware 模式现在设置 DFC_REQUIRE_MARKDOWN_CITATION=true。
+2. outcome-only 模式设置 DFC_REQUIRE_MARKDOWN_CITATION=false，以保留消融边界。
+3. 如果存在检索证据，但最终答案没有 markdown URL 引用，则 reward 上限为 0.08。
+4. 如果答案使用裸 bracket 引用或 markdown 外的原始 URL，则 reward 上限为 0.12。
+5. v2 prompt 现在要求只输出一个短句，并且只输出一个从检索证据中复制的
+   markdown URL 引用。
+6. rollout 汇总器可以通过 --recompute-details 使用当前 reward 代码重算诊断细节，
+   同时保留日志里记录的 reward。
 ```
 
-### Parser Bug Found
+### 发现解析器错误
 
-During the markdown-cap smoke, one failure sample looked like this:
+在扣分上限smoke期间，一个故障示例如下所示：
 
 ```text
 [NCDAS: Substance Abuse and Addiction Statistics [2025]](https://drugabusestatistics.org)
 ```
 
-This is markdown. The old regex failed to count it because the label contained
-an inner bracketed year, `[2025]`. That made the metrics say
-`citation_count=0`, even though the model had produced a markdown link.
+这是markdown。旧的正则表达式无法计数，因为标签包含
+内括号年份`[2025]`。这使得指标显示
+`citation_count=0`，即使模型产生了扣分链接。
 
-Why this matters:
+为何重要：
 
 ```text
-If the parser undercounts citations, the reward and reports can punish or
-diagnose the wrong behavior. That contaminates the interpretation of GRPO runs.
+如果解析器少计引用，reward 和报告就可能惩罚或诊断错误的行为。
+这会污染对 GRPO 运行结果的解释。
 ```
 
-Fix:
+修复：
 
 ```text
-deepfactcite/reward.py now scans markdown links with a small parser that allows
-bracketed text inside the link label. It also strips legal markdown links before
-checking for bare brackets or raw URLs, so `[2025]` inside a valid citation
-label is not treated as a bad bare citation.
+deepfactcite/reward.py 现在用一个小型解析器扫描 markdown 链接，
+允许链接标签内部出现 bracket 文本。它还会先移除合法的 markdown 链接，
+再检查裸 bracket 或原始 URL，因此有效引用标签里的 `[2025]`
+不会被误判为不合格的裸引用。
 ```
 
-Sanity check passed:
+健全性检查通过：
 
 ```text
-Nested-label markdown link:
+嵌套标签 markdown 链接：
 citation_count=1, raw_url_count=0, bare_citation_count=0
 
-Bare [S_1] plus raw URL:
+裸 [S_1] 加原始 URL：
 citation_count=0, raw_url_count=1, bare_citation_count=1
 ```
 
-### Incomplete Markdown-Cap Run
+### 不完整的Markdown-Cap运行
 
-Command:
+命令：
 
 ```bash
 RUN_TAG=20260518_v2_markdowncap_2gpu \
@@ -1019,15 +989,15 @@ GRPO_TOTAL_STEPS=16 \
 bash scripts/deepfactcite/run_sglang_grpo_ablation_2gpu.sh
 ```
 
-Observed:
+观察结果：
 
 ```text
-Only 6 of 16 steps were written.
-No traceback, OOM, NCCL failure, or Python exception appeared in the log tail.
-After the stop, GPU was idle.
+计划 16 steps，只写出了 6 steps。
+日志末尾没有 traceback、OOM、NCCL failure 或 Python exception。
+停止后 GPU 处于空闲状态。
 ```
 
-Partial result before parser recomputation:
+解析器重新计算前的部分结果：
 
 ```text
 samples = 12
@@ -1041,7 +1011,7 @@ citation_count = 0.4167
 no_citation failures = 7
 ```
 
-Diagnostic recomputation after parser fix:
+解析器修复后的诊断重新计算：
 
 ```text
 total = 0.2492
@@ -1050,17 +1020,17 @@ citation_count = 0.5000
 no_citation failures = 6
 ```
 
-Interpretation:
+解释：
 
 ```text
-This partial run is useful as debugging evidence, not as a final experiment.
-It exposed a parser issue and confirmed that the new no-citation cap is active,
-but it cannot be compared fairly to completed 16-step runs.
+这次 partial run 可作为调试证据，但不是最终实验。
+它暴露了 parser 问题，也确认新的 no-citation cap 已生效；
+但它不能与完整 16-step run 做公平比较。
 ```
 
-### Current Parser-Fix Rerun
+### 当前解析器修复重新运行
 
-Command:
+命令：
 
 ```bash
 RUN_TAG=20260518_v2_markdowncap_parserfix2_2gpu \
@@ -1072,49 +1042,46 @@ GRPO_TOTAL_STEPS=16 \
 bash scripts/deepfactcite/run_sglang_grpo_ablation_2gpu.sh
 ```
 
-Launch status:
+启动状态：
 
 ```text
-Training entered async rollout.
-SearchQAVerlTool initialized with the v2 one-citation offline corpus.
-rollout_data_step_1.jsonl was created.
-GPU memory was occupied by the 2-card GRPO/SGLang stack.
-save_freq=0, so this run is still a smoke/ablation and will not consume large
-checkpoint disk.
+训练进入 async rollout。
+SearchQAVerlTool 使用 v2 one-citation 离线语料完成初始化。
+rollout_data_step_1.jsonl 已创建。
+GPU 显存被 2-card GRPO/SGLang 栈占用。
+save_freq=0，所以这次仍然是 smoke/ablation，不会消耗大量 checkpoint 磁盘。
 ```
 
-What to check when it completes:
+完成后需要检查的内容：
 
 ```text
-1. no_citation failures: target is below 9/32.
-2. claim_support: target is above 0.3906.
-3. unsupported_citation_rate: target is at or below 0.3750.
-4. search: should stay near 1.0000.
-5. response clip ratio: should stay 0.0000.
+1. no_citation 失败数：目标低于 9/32。
+2. claim_support：目标高于 0.3906。
+3. unsupported_citation_rate：目标不高于 0.3750。
+4. search：应保持接近 1.0000。
+5. response clip ratio：应保持 0.0000。
 ```
 
-If those pass, the next step is a saved 2-GPU run after disk cleanup. If they do
-not pass, do not scale to 4 GPUs; fix data/prompt/reward again first.
+如果这些检查通过，下一步是在磁盘清理后做一次会保存 checkpoint 的 2-GPU 运行。
+如果没有通过，不要扩展到 4-GPU；先继续修复数据、prompt 或 reward。
 
-## Stage 9: Small-Scale vs Scale-Up Rule
+## 第9阶段：小规模与扩展规则
 
-Important distinction:
+重要区别：
 
 ```text
-Small runs are not used as final effect estimates. They are used as mechanism
-tests.
+小规模 run 不用于估计最终效果，只用于机制测试。
 ```
 
-At 32 rollout samples, one sample changes an aggregate rate by 3.125 points.
-Therefore:
+在32个rollout样本处，一个样本将总速率改变3.125个点。
+因此：
 
 ```text
 no_citation 9 vs 10 is not statistically decisive.
 unsupported 0.3750 vs 0.4062 is also only about one sample of movement.
 ```
 
-But small runs can still show whether the experiment is pointed in the right
-direction. The v2 result was large enough to count as a mechanism signal:
+但小批量运行仍然能说明实验方向是否正确。v2 结果已经足以算作机制信号：
 
 ```text
 outcome-only -> citation-aware
@@ -1123,34 +1090,32 @@ unsupported_citation_rate: 0.8438 -> 0.3750
 no_citation: 27 -> 9
 ```
 
-That is why v2 is worth continuing. The parser-fix run had mixed evidence:
+这就是为什么v2值得继续的原因。解析器修复运行有混合证据：
 
 ```text
-claim_support improved to 0.4375
-citation_precision improved to 0.4406
-format/search stayed at 1.0000
-but no_citation was 10 and unsupported was 0.4062
+claim_support 提升到 0.4375
+citation_precision 提升到 0.4406
+format/search 保持 1.0000
+但 no_citation 为 10，unsupported 为 0.4062
 ```
 
-Interpretation:
+解释：
 
 ```text
-This does not prove the fix is bad, but it also does not justify spending 4/8
-GPUs yet. It says the next cheap step should target the exact residual failure:
-the model still ignores markdown citation formatting in some cases.
+这不能证明修复不好，但也不足以支撑现在就花 4/8 张 GPU。
+它说明下一步便宜实验应该瞄准确切的残余失败：
+模型在某些情况下仍然忽略 markdown citation 格式。
 ```
 
-Scale-up policy:
+放大策略：
 
 ```text
-1. 2-GPU tiny run: verify engineering and mechanism.
-2. 2-GPU or 4-GPU medium run: verify trend with saved checkpoint after the
-   mechanism works.
-3. 8-GPU run: reserve for final throughput or larger confirmed training, not
-   for debugging reward/data definitions.
+1. 2-GPU tiny run：验证工程链路和机制。
+2. 2-GPU 或 4-GPU medium run：机制成立后，用保存 checkpoint 的运行验证趋势。
+3. 8-GPU run：留给最终吞吐或已确认的大规模训练，不用于调试 reward/data 定义。
 ```
 
-The promotion gate is based on the best completed v2 citation-aware baseline:
+扩展门槛基于最完整的 v2 引用感知基线：
 
 ```text
 no_citation < 9/32
@@ -1161,29 +1126,27 @@ response clip ratio 0.0
 disk cleaned before checkpoint save
 ```
 
-These are not universal scientific thresholds. They are local engineering
-gates: a more expensive run should beat the current best cheap baseline on the
-failure it is supposed to fix, while preserving Search-R1 behavior.
+这些不是通用科学阈值，而是本地工程门槛：更昂贵的运行应该先击败当前最便宜基线中的失败模式，
+同时保留 Search-R1 行为。
 
-## Stage 10: v3 Prompt-Fix Data
+## 第10阶段： v3提示-修复数据
 
-Reason:
-
-```text
-The v2 parquet was generated before the prompt was patched. That means the
-parser-fix run used the new reward cap but the old prompt did not explicitly
-forbid bare [S_xxx], bare [1], and raw URLs.
-```
-
-Fix:
+原因：
 
 ```text
-Regenerate the same 32-row one-citation data with the current stricter prompt.
-Keep rows, retriever corpus, support thresholds, model, reward, and 2-GPU setup
-otherwise unchanged.
+v2 parquet 是在 prompt 补丁之前生成的。
+这意味着 parser-fix 运行使用了新的 reward 上限，
+但旧 prompt 并没有明确禁止裸 [S_xxx]、裸 [1] 和原始 URL。
 ```
 
-Command:
+修复：
+
+```text
+用当前更严格的 prompt 重新生成同样的 32 行 one-citation 数据。
+除此之外，行集合、检索语料、支持阈值、模型、reward 和 2-GPU 设置都保持不变。
+```
+
+命令：
 
 ```bash
 /root/autodl-tmp/conda_envs/searchr1-qwen3-sft/bin/python \
@@ -1198,7 +1161,7 @@ Command:
   --citation-format-template
 ```
 
-Data summary:
+数据摘要：
 
 ```text
 kept_rows = 32
@@ -1210,14 +1173,14 @@ min_support_score = 1.0
 avg_support_score = 1.0
 ```
 
-Retriever validation:
+检索器验证：
 
 ```text
 train top-2 URL hit: 28/28
 test top-2 URL hit: 4/4
 ```
 
-Current run:
+当前运行：
 
 ```bash
 RUN_TAG=20260518_v3_promptfix_2gpu \
@@ -1229,73 +1192,71 @@ GRPO_TOTAL_STEPS=16 \
 bash scripts/deepfactcite/run_sglang_grpo_ablation_2gpu.sh
 ```
 
-Launch validation:
+启动验证：
 
 ```text
 trainer accepted train=28 / val=4
-SearchQAVerlTool initialized with v3 prompt-fix corpus
+SearchQAVerlTool 已使用 v3 prompt-fix 语料初始化
 reward_manager=deepfactcite_custom
 save_freq=0
 ```
 
-Result:
+结果：
 
 ```text
 reports/dfc_mixclean200_v3_promptfix_onecite_2gpu_rollout_summary.md
 logs/grpo/rollouts/dfc-mixclean200-v3-promptfix-onecite-20260518_2gpu/
 ```
 
-| Metric | v2 Citation-Aware | v3 Prompt-Fix | Readout |
+| 指标 | v2 引用感知 | v3 prompt-fix | 解读 |
 |---|---:|---:|---|
-| search | 1.0000 | 0.9375 | v3 has 2 no-search failures |
-| format | 0.9625 | 0.9875 | v3 better |
-| URL validity | 0.7188 | 0.9375 | v3 much better |
-| citation precision | 0.3937 | 0.6312 | v3 much better |
-| claim support | 0.3906 | 0.6250 | v3 much better |
-| unsupported citation rate | 0.3750 | 0.1250 | v3 much better |
-| fake URL rate | 0.0000 | 0.0000 | clean |
-| citation count | 0.7188 | 0.9375 | v3 cites more reliably |
-| no_citation failures | 9 | 2 | v3 fixes main failure |
-| response clip ratio | 0.0000 | 0.0000 | still clean |
+| search | 1.0000 | 0.9375 | v3有2次未搜索失败 |
+| format | 0.9625 | 0.9875 | v3更好 |
+| URL 有效性 | 0.7188 | 0.9375 | 好得多 |
+| 引用精确度 | 0.3937 | 0.6312 | 好得多 |
+| 声明支持 | 0.3906 | 0.6250 | 好得多 |
+| 不支持的引用率 | 0.3750 | 0.1250 | 好得多 |
+| 虚假 URL 率 | 0.0000 | 0.0000 | 干净 |
+| 引用计数 | 0.7188 | 0.9375 | v3引用更可靠 |
+| no_citation 失败 | 9 | 2 | v3 修复了主要失败模式 |
+| 响应剪辑比率 | 0.0000 | 0.0000 | 仍然干净 |
 
-Interpretation:
+解释：
 
 ```text
-This is the first result that clears the local scale-up gate. It shows that the
-main bottleneck was not simply small data or insufficient GPU scale. The missing
-piece was alignment between the training data prompt and the reward parser/caps.
+这是第一个通过本地扩展门槛的结果。它说明主要瓶颈不只是数据小或 GPU 规模不足；
+缺失的一环是训练数据 prompt 与 reward parser/cap 之间的对齐。
 ```
 
-Remaining caveat:
+剩余警告：
 
 ```text
-The two no-search/no-answer failures mean search behavior must be watched in the
-next run. The model did not collapse, but the next medium run should preserve
-search above this level while saving a checkpoint.
+两个 no-search/no-answer 失败说明下一轮必须关注搜索行为。
+模型没有崩，但下一次保存 checkpoint 的 medium run 应该至少保持这个搜索水平。
 ```
 
-Next decision:
+下一个决定：
 
 ```text
-Do not use 8 GPUs for debugging. Use a saved medium run after disk cleanup:
-4 GPUs if available, otherwise 2 GPUs. The purpose is to produce a checkpoint
-for evaluation, not another no-checkpoint smoke.
+不要用 8 GPU 做调试。磁盘清理后做一次会保存 checkpoint 的 medium run：
+如果有 4 GPU 就用 4 GPU，否则用 2 GPU。目标是产出可评测 checkpoint，
+而不是再做一次不保存 checkpoint 的 smoke。
 ```
 
-Audit:
+审核:
 
 ```text
-Rows checked: 32
-Steps checked: 16
-Training reward recomputation: exact match, max diff = 0.0
-Diagnostic metric recomputation: exact match against logged details
-Prompt target leakage: 0/28 train, 0/4 test
-Offline retriever target URL top-1 hit: 28/28 train, 4/4 test
+检查 rows：32
+检查 steps：16
+训练 reward 重算：完全匹配，max diff = 0.0
+诊断指标重算：与 logged details 完全匹配
+Prompt target leakage：0/28 train, 0/4 test
+离线检索器目标 URL top-1 hit：28/28 train, 4/4 test
 bare_citation_count mean: 0.0
 raw_url_count mean: 0.0
 ```
 
-Failure audit:
+审核失败：
 
 ```text
 2 no_search/no_citation rows:
@@ -1304,32 +1265,31 @@ Failure audit:
 
 4 unsupported citation rows:
   climate-policy question, two samples
-  Jim Umbricht question, two samples
+  Jim Umbricht 问题，两个样本
 ```
 
-Citation label caveat:
+引用标签警告：
 
 ```text
-The model mostly learned to attach real URLs, but many labels are still snippet
-IDs. Out of 30 markdown citations, 22 labels were S_xxx-style and 8 were
-human-readable. This is acceptable for the current URL-provenance/support
-objective, but a final product-quality run should add a label-quality metric if
-human-readable citation labels matter.
+模型基本学会了附上真实 URL，但很多 label 仍然是 snippet ID。
+30 个 markdown citation 中，22 个 label 是 S_xxx 风格，8 个是人类可读 label。
+这对当前 URL 来源和支持性目标是可接受的；
+但如果最终产品需要人类可读引用标签，就应该加入 label-quality 指标。
 ```
 
-## Stage 7: CPU-Mode Consolidation and 4-GPU Prep
+## 第7阶段：CPU 模式整合和 4-GPU 准备
 
-After the v3 prompt-fix result, GPU work can pause safely. Useful CPU-only work:
+在 v3 prompt-fix 结果之后，GPU 工作可以安全暂停。CPU-only 阶段仍有有用工作：
 
 ```text
-1. preserve rollout examples as a readable gallery;
-2. write the beginner-friendly reading path;
-3. prepare the 4-GPU saved-checkpoint command;
-4. check data/report consistency before renting GPUs again;
-5. clean only safe temporary or empty training artifacts.
+1. 把 rollout 样例保存成可读 gallery；
+2. 写出适合新手阅读的路径；
+3. 准备 4-GPU saved-checkpoint 命令；
+4. 再次租 GPU 前检查 data/report 一致性；
+5. 只清理安全的临时或空训练 artifact。
 ```
 
-New artifacts:
+新工件：
 
 ```text
 reports/deepfactcite_v3_promptfix_rollout_gallery_20260518.md
@@ -1339,7 +1299,7 @@ docs/deepfactcite_4gpu_saved_run_plan_20260518.md
 scripts/deepfactcite/run_sglang_grpo_v3_promptfix_4gpu_saved.sh
 ```
 
-The 4-GPU wrapper defaults to `DRY_RUN=1` and model-only checkpoint saving:
+4-GPU 包装脚本默认为 `DRY_RUN=1`，并且只保存模型 checkpoint：
 
 ```text
 GRPO_ACTOR_CKPT_SAVE_CONTENTS=[model]
@@ -1347,17 +1307,16 @@ GRPO_SAVE_FREQ=16
 GRPO_MAX_ACTOR_CKPT_TO_KEEP=1
 ```
 
-Reason:
+原因：
 
 ```text
-The disk is still tight. Model-only checkpoints are enough for evaluation and
-use much less disk than resume-capable checkpoints with extra state.
+磁盘仍然紧张。model-only checkpoint 已足够评测，
+并且比带 extra state、可恢复训练的 checkpoint 节省很多磁盘。
 ```
 
-Next GPU action:
+下一个 GPU 操作：
 
 ```text
-Run a short 4-GPU checkpoint-write sanity first. If the run starts cleanly,
-writes a checkpoint, and keeps search/citation metrics sane, continue to the
-64-step saved medium run.
+先运行一个短的 4-GPU checkpoint 写入 sanity 检查。如果能干净启动、写出 checkpoint，
+并且 search/citation 指标正常，再继续 64-step saved medium run。
 ```

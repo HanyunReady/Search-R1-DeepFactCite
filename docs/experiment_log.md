@@ -1,47 +1,47 @@
 
-## Experiment log
+## 实验日志
 
-### Preliminary results 
+### 初步结果
 
-Resources: [wandb](https://wandb.ai/peterjin/Search-R1-open)
+资源：[wandb](https://wandb.ai/peterjin/Search-R1-open)
 
 
-The preliminary experiment is conducted only on natural question (NQ) dataset (+ PPO) with a small number of training steps.
+初步实验只在 Natural Questions（NQ）数据集上进行，训练方法为 PPO，训练步数较少。
 
 
 ### v0.1
 
-Resources: [wandb](https://wandb.ai/peterjin/Search-R1-nq_hotpotqa_train), [docs](https://github.com/PeterGriffinJin/Search-R1/tree/main/scripts/nq_hotpotqa), [scripts](https://github.com/PeterGriffinJin/Search-R1/tree/main/scripts/nq_hotpotqa/v0.1)
+资源：[wandb](https://wandb.ai/peterjin/Search-R1-nq_hotpotqa_train)、[docs](https://github.com/PeterGriffinJin/Search-R1/tree/main/scripts/nq_hotpotqa)、[scripts](https://github.com/PeterGriffinJin/Search-R1/tree/main/scripts/nq_hotpotqa/v0.1)
 
 
-We extend the experiments from NQ to seven datasets with both PPO and GRPO methods. The studies are still on a small number of training steps with a big learning rate warm up ratio.
+我们把实验从 NQ 扩展到 7 个数据集，并同时使用 PPO 和 GRPO 方法。这个阶段的训练步数仍然较少，并且学习率 warmup 比例较大。
 
 
 ### v0.2
 
-Resources: [wandb](https://wandb.ai/peterjin/Search-R1-v0.2), [docs](https://github.com/PeterGriffinJin/Search-R1/tree/main/scripts/nq_hotpotqa), [scripts](https://github.com/PeterGriffinJin/Search-R1/tree/main/scripts/nq_hotpotqa/v0.2), [paper](https://arxiv.org/abs/2503.09516)
+资源：[wandb](https://wandb.ai/peterjin/Search-R1-v0.2)、[docs](https://github.com/PeterGriffinJin/Search-R1/tree/main/scripts/nq_hotpotqa)、[scripts](https://github.com/PeterGriffinJin/Search-R1/tree/main/scripts/nq_hotpotqa/v0.2)、[paper](https://arxiv.org/abs/2503.09516)
 
 
-We fix several bugs including [retrieved token masking](https://github.com/PeterGriffinJin/Search-R1/pull/21) and [GRPO sample indexing](https://github.com/PeterGriffinJin/Search-R1/commit/9ec2fa9892fbf0315d0c67b4dc08ae8f6cf5f378). 
-The former can largely improve the stablity of RL training. 
-Then we adjust the training scripts, increasing the number of training steps and decreasing the learning rate warm up ratio, to obtain a better performance, and conduct experiments on different scale of LLMs (3B, 7B, 14B).
+我们修复了几个 bug，包括 [retrieved token masking](https://github.com/PeterGriffinJin/Search-R1/pull/21) 和 [GRPO sample indexing](https://github.com/PeterGriffinJin/Search-R1/commit/9ec2fa9892fbf0315d0c67b4dc08ae8f6cf5f378)。
+前者可以显著提升 RL 训练的稳定性。
+随后，我们调整了训练脚本：增加训练步数、降低学习率 warmup 比例，以获得更好的性能；同时在不同规模的 LLM（3B、7B、14B）上开展实验。
 
 
 ### v0.3
 
-Resources: [wandb](https://wandb.ai/peterjin/Search-R1-v0.3), [docs](https://github.com/PeterGriffinJin/Search-R1/tree/main/scripts/nq_hotpotqa), [scripts](https://github.com/PeterGriffinJin/Search-R1/tree/main/scripts/nq_hotpotqa/v0.3), [paper](https://arxiv.org/abs/2505.15117)
+资源：[wandb](https://wandb.ai/peterjin/Search-R1-v0.3)、[docs](https://github.com/PeterGriffinJin/Search-R1/tree/main/scripts/nq_hotpotqa)、[scripts](https://github.com/PeterGriffinJin/Search-R1/tree/main/scripts/nq_hotpotqa/v0.3)、[paper](https://arxiv.org/abs/2505.15117)
 
-We conduct studies on (1) reward design; (2) LLM backbone; and (3) search engine.
+我们研究了：（1）奖励设计；（2）LLM backbone；（3）搜索引擎。
 
-- Reward design
-  - Format reward
-  - Intermediate retrieval reward
+- 奖励设计
+  - 格式奖励
+  - 中间检索奖励
 - LLM backbone
-  - LLM type (e.g., general LLM or reasoning LLM)
-  - LLM scale (3B/7B/14B/32B)
-- Search engine
-  - RL training dynamics
-  - generalization during inference
-- Data scaling
+  - LLM 类型（例如通用 LLM 或推理型 LLM）
+  - LLM 规模（3B/7B/14B/32B）
+- 搜索引擎
+  - RL 训练动态
+  - 推理阶段泛化
+- 数据规模扩展
 
-Details can be found in the [paper](https://arxiv.org/abs/2505.15117).
+详细内容见这篇 [paper](https://arxiv.org/abs/2505.15117)。

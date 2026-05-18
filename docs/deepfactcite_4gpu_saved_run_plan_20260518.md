@@ -1,14 +1,12 @@
-# DeepFactCite 4-GPU Saved Checkpoint Plan
+# DeepFactCite 4-GPU 保存 Checkpoint 计划
 
-Date: 2026-05-18
+日期：2026-05-18
 
-## Decision
+## 结论
 
-Use 4 GPUs only for a saved medium run after the v3 prompt-fix result. Do not
-rent 8 GPUs for the next step. The current bottleneck is experiment control,
-checkpoint/eval discipline, and claim-support behavior, not raw parallelism.
+在 v3 prompt-fix 结果出来之后，只使用 4 张 GPU 做一次会保存 checkpoint 的中等规模训练。下一步不要租 8 张 GPU。当前瓶颈不是原始并行度，而是实验控制、checkpoint/评测纪律，以及 claim-support 行为。
 
-Why 4 GPUs are now justified:
+现在值得使用 4 张 GPU 的原因：
 
 | Gate | v3 result | Decision |
 |---|---:|---|
@@ -19,18 +17,17 @@ Why 4 GPUs are now justified:
 | response clipping | 0.0000 | passed |
 | fake URL rate | 0.0000 | passed |
 
-The goal of the next run is not another smoke test. The goal is to save a
-checkpoint that can be evaluated against answer/search and citation metrics.
+下一轮训练的目标不是再做一次 smoke test，而是保存一个可以用答案/搜索指标和引用指标共同评测的 checkpoint。
 
-## Prepared Entrypoints
+## 已准备的入口
 
-Parameterized base launcher:
+参数化基础启动脚本：
 
 ```text
 scripts/deepfactcite/run_sglang_grpo_ablation_2gpu.sh
 ```
 
-This script still defaults to 2 GPUs, but now accepts:
+这个脚本默认仍然是 2 GPU，但现在接受这些参数：
 
 ```text
 N_GPUS_PER_NODE
@@ -38,19 +35,19 @@ TENSOR_MODEL_PARALLEL_SIZE
 CUDA_VISIBLE_DEVICES
 ```
 
-4-GPU v3 saved wrapper:
+4-GPU v3 保存版 wrapper：
 
 ```text
 scripts/deepfactcite/run_sglang_grpo_v3_promptfix_4gpu_saved.sh
 ```
 
-2-GPU fallback wrapper for 3-card availability:
+当只拿到 3 张卡时使用的 2-GPU fallback wrapper：
 
 ```text
 scripts/deepfactcite/run_sglang_grpo_v3_promptfix_2gpu_saved.sh
 ```
 
-Default settings:
+默认设置：
 
 ```text
 DATA_DIR=data/deepfactcite_sglang_grpo_claim_filtered_v3_promptfix_onecite
@@ -67,24 +64,22 @@ rollout.n=2
 train_batch_size=1
 ```
 
-The wrapper defaults to `DRY_RUN=1`, so it is safe to inspect on CPU-only
-machines.
+wrapper 默认 `DRY_RUN=1`，所以可以在没有 GPU 的机器上安全检查。
 
-## 3-GPU Availability
+## 3-GPU 可用时的处理
 
-Do not run the 4-GPU config on 3 GPUs.
+不要在 3 张 GPU 上运行 4-GPU 配置。
 
-Reason:
+原因：
 
 ```text
-The prepared 4-GPU run uses tensor_model_parallel_size=4. A 3-GPU variant would
-require TP=3 or a different actor/rollout placement. TP=3 is not a standard
-validated split for this Qwen3-8B/SGLang setup and may be incompatible with
-attention-head partitioning. Debugging that would spend GPU time on
-infrastructure rather than citation learning.
+准备好的 4-GPU 运行使用 tensor_model_parallel_size=4。3-GPU 版本需要
+TP=3 或不同的 actor/rollout 放置方式。TP=3 不是这个 Qwen3-8B/SGLang
+设置下验证过的标准切分方式，并且可能与 attention head 分片不兼容。
+调这个问题会把 GPU 时间花在基础设施上，而不是花在引用学习上。
 ```
 
-If only 3 cards are available, use 2 cards with the stable TP=2 path:
+如果只有 3 张卡可用，使用稳定 TP=2 路径的 2 卡配置：
 
 ```bash
 DRY_RUN=0 \
@@ -94,7 +89,7 @@ EXPERIMENT_NAME=dfc-mixclean200-v3-promptfix-onecite-20260518_2gpu_save_sanity \
 bash scripts/deepfactcite/run_sglang_grpo_v3_promptfix_2gpu_saved.sh
 ```
 
-If the 8-step saved sanity is clean, continue:
+如果 8-step 保存 sanity run 是干净的，继续：
 
 ```bash
 DRY_RUN=0 \
@@ -104,39 +99,36 @@ EXPERIMENT_NAME=dfc-mixclean200-v3-promptfix-onecite-20260518_2gpu_saved \
 bash scripts/deepfactcite/run_sglang_grpo_v3_promptfix_2gpu_saved.sh
 ```
 
-This is slower than 4 GPUs but scientifically cleaner than inventing an
-untested 3-GPU topology.
+这会比 4 GPU 慢，但比临时发明一个未验证的 3-GPU 拓扑更干净、更有科学性。
 
-## Disk Requirement
+## 磁盘要求
 
-Current `/root/autodl-tmp` free space was about 14G before cleanup. That is too
-tight for saved checkpoint work.
+清理前 `/root/autodl-tmp` 的剩余空间大约只有 14G。这对保存 checkpoint 的工作来说太紧。
 
-Minimum recommendation before starting:
+启动前的最低建议：
 
 ```text
-At least 35G free for model-only checkpoint saving.
-At least 50G free for resume-capable checkpoint saving with extra state.
+保存 model-only checkpoint 至少需要 35G 可用空间。
+保存带 extra state、可恢复训练的 checkpoint 至少需要 50G 可用空间。
 ```
 
-The prepared wrapper defaults to model-only save:
+准备好的 wrapper 默认只保存模型：
 
 ```text
 GRPO_ACTOR_CKPT_SAVE_CONTENTS=[model]
 ```
 
-Use this first. Only switch to `[model,extra]` if resume is more important than
-disk pressure.
+先使用这个设置。只有在恢复训练比磁盘压力更重要时，才切换到 `[model,extra]`。
 
-## Commands
+## 命令
 
-CPU/no-GPU dry-run check:
+CPU/无 GPU dry-run 检查：
 
 ```bash
 bash scripts/deepfactcite/run_sglang_grpo_v3_promptfix_4gpu_saved.sh
 ```
 
-First 4-GPU checkpoint-write sanity run:
+第一次 4-GPU checkpoint 写入 sanity run：
 
 ```bash
 DRY_RUN=0 \
@@ -146,8 +138,7 @@ EXPERIMENT_NAME=dfc-mixclean200-v3-promptfix-onecite-20260518_4gpu_save_sanity \
 bash scripts/deepfactcite/run_sglang_grpo_v3_promptfix_4gpu_saved.sh
 ```
 
-If that run starts cleanly, writes a checkpoint, and keeps rollout metrics sane,
-run the medium saved experiment:
+如果这次运行能干净启动、写出 checkpoint，并且 rollout 指标保持正常，再运行中等规模保存实验：
 
 ```bash
 DRY_RUN=0 \
@@ -157,7 +148,7 @@ EXPERIMENT_NAME=dfc-mixclean200-v3-promptfix-onecite-20260518_4gpu_saved \
 bash scripts/deepfactcite/run_sglang_grpo_v3_promptfix_4gpu_saved.sh
 ```
 
-Expected output locations:
+预期输出位置：
 
 ```text
 outputs/deepfactcite/grpo/<EXPERIMENT_NAME>/
@@ -166,23 +157,23 @@ logs/<EXPERIMENT_NAME>.log
 tensorboard_log/DeepFactCite-GRPO/<EXPERIMENT_NAME>/
 ```
 
-## Stop Rules
+## 停止规则
 
-Stop the 4-GPU run early if any of these appear in the first 8 to 16 steps:
+如果前 8 到 16 步出现以下任一信号，应尽早停止 4-GPU 运行：
 
 | Signal | Stop condition |
 |---|---|
-| search | drops materially below the v3 0.9375 diagnostic level |
-| no citation | rises back toward v2 behavior, especially above 6/32 |
-| claim support | falls below 0.50 on comparable samples |
-| unsupported citation rate | rises above 0.25 |
-| fake URL rate | becomes non-zero in repeated samples |
-| checkpoint | save fails or disk free space becomes dangerously low |
-| infrastructure | SGLang/Ray repeatedly restarts, hangs, or leaks memory |
+| search | 明显低于 v3 诊断运行的 0.9375 水平 |
+| no citation | 回升到接近 v2 的行为，尤其是超过 6/32 |
+| claim support | 在可比样本上低于 0.50 |
+| unsupported citation rate | 高于 0.25 |
+| fake URL rate | 在重复样本中变为非零 |
+| checkpoint | 保存失败，或磁盘可用空间降到危险水平 |
+| infrastructure | SGLang/Ray 反复重启、卡死或内存泄漏 |
 
-## Post-Run Checklist
+## 运行后检查清单
 
-After the run finishes:
+运行结束后：
 
 ```bash
 /root/autodl-tmp/conda_envs/searchr1-qwen3-sft/bin/python \
@@ -192,17 +183,16 @@ After the run finishes:
   --recompute-details
 ```
 
-Then record:
+然后记录：
 
 ```text
-1. exact command;
-2. free disk before/after;
-3. checkpoint path and checkpoint size;
-4. rollout metrics;
-5. 5 good samples and 5 failure samples;
-6. whether answer/search behavior stayed intact;
-7. whether citation quality improved beyond the 16-step diagnostic.
+1. 精确命令；
+2. 运行前/运行后的可用磁盘；
+3. checkpoint 路径和 checkpoint 大小；
+4. rollout 指标；
+5. 5 个好样例和 5 个失败样例；
+6. 答案/搜索行为是否保持完整；
+7. 引用质量是否超过 16-step 诊断运行。
 ```
 
-Do not report the run as a win until the saved checkpoint is evaluated, not just
-trained.
+不要只因为训练跑完就把它报告为胜利。必须等保存下来的 checkpoint 完成评测后，才能下结论。
