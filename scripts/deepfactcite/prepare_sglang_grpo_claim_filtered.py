@@ -50,6 +50,10 @@ def main() -> None:
     parser.add_argument("--min-support", type=float, default=1.0)
     parser.add_argument("--min-claim-tokens", type=int, default=4)
     parser.add_argument("--max-claim-tokens", type=int, default=42)
+    parser.add_argument("--max-query-tokens", type=int, default=0)
+    parser.add_argument("--max-answer-sentences", type=int, default=3)
+    parser.add_argument("--strict-one-citation-prompt", action="store_true")
+    parser.add_argument("--citation-format-template", action="store_true")
     parser.add_argument("--max-tool-text-chars", type=int, default=700)
     parser.add_argument("--test-rows", type=int, default=4)
     parser.add_argument("--reject-preview", type=int, default=80)
@@ -125,6 +129,10 @@ def main() -> None:
             "min_support": args.min_support,
             "min_claim_tokens": args.min_claim_tokens,
             "max_claim_tokens": args.max_claim_tokens,
+            "max_query_tokens": args.max_query_tokens,
+            "max_answer_sentences": args.max_answer_sentences,
+            "strict_one_citation_prompt": args.strict_one_citation_prompt,
+            "citation_format_template": args.citation_format_template,
             "max_tool_text_chars": args.max_tool_text_chars,
         },
         "metrics": {
@@ -147,6 +155,8 @@ def main() -> None:
 def build_candidate(query: str, response: str, source_index: int, args: argparse.Namespace) -> tuple[dict[str, Any] | None, str]:
     if not query:
         return None, "missing_query"
+    if args.max_query_tokens > 0 and len(_tokenize(query)) > args.max_query_tokens:
+        return None, "query_too_broad"
     answer = extract_answer(response) or ""
     if not answer:
         return None, "missing_answer"
@@ -218,7 +228,7 @@ def build_candidate(query: str, response: str, source_index: int, args: argparse
         "task_type": "long_fact_qa",
         "query": query,
         "answer": " ".join(target_claims),
-        "prompt": [make_prompt(query)],
+        "prompt": [make_prompt(query, args)],
         "reward_model": {
             "style": "rule",
             "ground_truth": {
@@ -266,17 +276,35 @@ def build_candidate(query: str, response: str, source_index: int, args: argparse
     return {"row": row, "docs": docs, "preview": preview}, "kept"
 
 
-def make_prompt(query: str) -> dict[str, str]:
+def make_prompt(query: str, args: argparse.Namespace) -> dict[str, str]:
+    max_sentences = max(1, int(args.max_answer_sentences))
+    if args.strict_one_citation_prompt or args.max_citations <= 1:
+        citation_rule = "Use exactly 1 markdown citation [short label](URL)"
+    else:
+        citation_rule = f"Use {args.min_citations} to {args.max_citations} markdown citations [short label](URL)"
+    sentence_rule = (
+        "Answer in exactly 1 concise sentence"
+        if max_sentences == 1
+        else f"Answer the question in 1 to {max_sentences} concise sentences"
+    )
+    template_rule = ""
+    if args.citation_format_template:
+        template_rule = (
+            " Final answer shape must be: <answer>supported claim [short source label]"
+            "(URL copied from tool)</answer>. Outputs with [1], [S_xxx], or a bare URL "
+            "instead of markdown citation are wrong."
+        )
     return {
         "role": "user",
         "content": (
-            "Answer the question in 1 to 3 concise sentences. You must first search using "
-            "<google_search> query </google_search>. Use 1 to 2 markdown citations "
-            "[short label](URL), placed immediately after the claim they support. Every URL "
-            "must be copied exactly from the tool response, and every cited claim must be "
-            "directly supported by the cited snippet. If the evidence is not enough, say so "
-            "instead of broadening the claim. Finish with the final answer inside <answer> "
-            "and </answer>.\n"
+            f"{sentence_rule}. You must first search using "
+            f"<google_search> query </google_search>. {citation_rule}, placed immediately "
+            "after the claim it supports. Every URL must be copied exactly from the tool "
+            "response. Do not use bare [S_xxx], bare [1], or raw URLs outside markdown. "
+            "Do not add background facts, dates, causes, or examples unless the "
+            "cited snippet directly states them. If the evidence is narrow, answer only the "
+            f"narrow supported fact.{template_rule} Finish with the final answer inside <answer> and "
+            "</answer>.\n"
             f"Question: {query}\n"
         ),
     }

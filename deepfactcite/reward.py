@@ -17,6 +17,8 @@ SNIPPET_RE = re.compile(r'<snippet[^>]*>(.*?)</snippet>', re.S | re.I)
 CITATION_RE = re.compile(r"\[([^\[\]]+)\]\(([^()\s]+)\)")
 INDEX_CITATION_RE = re.compile(r"\[([1-9]\d*)\]\(([^()\s]+)\)")
 MARKDOWN_LINK_RE = re.compile(r"\[([^\[\]]+)\]\(([^()\s]+)\)")
+BARE_BRACKET_CITATION_RE = re.compile(r"\[([^\[\]\n]+)\](?!\()")
+RAW_URL_RE = re.compile(r"(?<!\()https?://[^\s)>\]]+")
 DOC_RE = re.compile(
     r"Doc\s+(?P<idx>\d+)\(Title:\s*(?P<title>.*?)\)\s*"
     r"(?:URL:\s*(?P<url>\S+)\s*)?"
@@ -69,6 +71,14 @@ class DeepFactCiteWeights:
     format: float = 0.10
     search: float = 0.05
     cost: float = 0.05
+
+
+@dataclass(frozen=True)
+class MarkdownLink:
+    label: str
+    url: str
+    start: int
+    end: int
 
 
 def normalize_answer(text: str) -> str:
@@ -170,8 +180,48 @@ def _overlap_support_score(claim: str, document: str) -> float:
     return 0.0
 
 
+def _iter_markdown_links(text: str) -> list[MarkdownLink]:
+    """Extract markdown links while tolerating bracketed text inside labels."""
+    text = text or ""
+    links: list[MarkdownLink] = []
+    i = 0
+    while i < len(text):
+        start = text.find("[", i)
+        if start < 0:
+            break
+        cursor = start + 1
+        matched = False
+        while cursor < len(text):
+            close = text.find("]", cursor)
+            if close < 0:
+                break
+            if close + 1 < len(text) and text[close + 1] == "(":
+                end = text.find(")", close + 2)
+                if end < 0:
+                    break
+                label = text[start + 1 : close].strip()
+                url = text[close + 2 : end].strip()
+                if label and url and not re.search(r"\s", url) and "(" not in url:
+                    links.append(MarkdownLink(label=label, url=url, start=start, end=end + 1))
+                    i = end + 1
+                    matched = True
+                    break
+            cursor = close + 1
+        if not matched:
+            i = start + 1
+    return links
+
+
 def _strip_markdown_links(text: str) -> str:
-    return MARKDOWN_LINK_RE.sub("", text or "")
+    text = text or ""
+    chunks: list[str] = []
+    last = 0
+    for link in _iter_markdown_links(text):
+        chunks.append(text[last : link.start])
+        chunks.append(" ")
+        last = link.end
+    chunks.append(text[last:])
+    return "".join(chunks)
 
 
 def _clean_claim(text: str) -> str:
@@ -217,10 +267,10 @@ def _claim_near_citation(answer: str, start: int, end: int) -> str:
 
 def _citation_claims(answer: str) -> list[dict[str, str]]:
     claims = []
-    for match in CITATION_RE.finditer(answer or ""):
-        label = match.group(1).strip()
-        url = _canonical_url(match.group(2))
-        claim = _claim_near_citation(answer or "", match.start(), match.end())
+    for link in _iter_markdown_links(answer or ""):
+        label = link.label.strip()
+        url = _canonical_url(link.url)
+        claim = _claim_near_citation(answer or "", link.start, link.end)
         if not claim:
             claim = label
         claims.append({"label": label, "url": url, "claim": claim})
@@ -257,7 +307,10 @@ def citation_metrics(text: str, use_judge: bool | None = None) -> dict[str, floa
     answer = extract_answer(text) or ""
     docs = extract_documents(text)
     citations = _citation_claims(answer)
-    index_citations = INDEX_CITATION_RE.findall(answer)
+    index_citations = [citation for citation in citations if re.fullmatch(r"[1-9]\d*", citation["label"])]
+    answer_without_markdown_links = _strip_markdown_links(answer)
+    bare_citations = BARE_BRACKET_CITATION_RE.findall(answer_without_markdown_links)
+    raw_urls = RAW_URL_RE.findall(answer_without_markdown_links)
     if not citations:
         return {
             "citation_presence": 0.0,
@@ -271,6 +324,8 @@ def citation_metrics(text: str, use_judge: bool | None = None) -> dict[str, floa
             "unsupported_citation_rate": 1.0 if docs else 0.0,
             "fake_url_rate": 0.0,
             "citation_count": 0.0,
+            "bare_citation_count": float(len(bare_citations)),
+            "raw_url_count": float(len(raw_urls)),
         }
 
     valid = [citation for citation in citations if citation["url"] in docs]
@@ -302,6 +357,8 @@ def citation_metrics(text: str, use_judge: bool | None = None) -> dict[str, floa
         "unsupported_citation_rate": unsupported_citation_rate,
         "fake_url_rate": 1.0 - url_validity,
         "citation_count": float(len(citations)),
+        "bare_citation_count": float(len(bare_citations)),
+        "raw_url_count": float(len(raw_urls)),
     }
 
 
@@ -366,6 +423,7 @@ def compute_score(
     format_value, _ = validate_structure(text)
     answer_targets = ground_truth.get("target")
     answer_value = em_or_subem(answer or "", answer_targets)
+    has_evidence = bool(extract_documents(text))
     cite = citation_metrics(text, use_judge=use_judge)
     search_value = search_score(text, max_searches=max_searches)
     cost_penalty = min(len(text) / 12000.0, 1.0)
@@ -383,6 +441,11 @@ def compute_score(
         total = min(total, _format_cap(format_value))
     if cite["citation_count"] > 0 and cite["url_validity"] < 1.0:
         total = min(total, 0.35)
+    if os.getenv("DFC_REQUIRE_MARKDOWN_CITATION", "false").lower() in {"1", "true", "yes"}:
+        if has_evidence and cite["citation_count"] <= 0:
+            total = min(total, float(os.getenv("DFC_NO_CITATION_CAP", "0.08")))
+        if cite.get("bare_citation_count", 0.0) > 0 or cite.get("raw_url_count", 0.0) > 0:
+            total = min(total, float(os.getenv("DFC_BAD_CITATION_FORMAT_CAP", "0.12")))
     if answer_value >= 1.0 and cite["citation_precision"] < 0.5:
         total = min(total, 0.5)
     if cite["unsupported_citation_rate"] >= 0.5 and cite["citation_count"] > 0:

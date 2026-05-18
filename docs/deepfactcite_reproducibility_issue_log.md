@@ -539,6 +539,218 @@ Every comparison table must say which serving path was used.
 
 ## Infrastructure Notes
 
+## GRPO Failure Ledger
+
+### F-GRPO-001: Retrieval-hit GRPO proved plumbing but not citation support
+
+Hypothesis:
+
+```text
+If GRPO examples are built so the target URL is retrievable, DeepFactCite reward
+should improve citation quality.
+```
+
+Observed result:
+
+```text
+2-GPU smoke completed 16 steps / 32 samples.
+reward 0.218, search 0.938, URL validity 0.594, citation precision 0.126,
+claim support 0.122, unsupported citation rate 0.755.
+```
+
+Analysis:
+
+```text
+Retrieving a relevant URL is not the same as supporting the local claim next to
+the citation. The model can cite a real URL while writing a broader sentence
+than the snippet proves.
+```
+
+Decision:
+
+```text
+Do not run a long GRPO from retrieval-hit data. Build claim-level
+support-filtered data first.
+```
+
+### F-GRPO-002: v1 claim-filtered citation-aware did not beat outcome-only
+
+Hypothesis:
+
+```text
+On the same claim-filtered data, citation-aware reward should improve URL
+validity, citation precision, claim support, and unsupported citation rate over
+outcome-only reward.
+```
+
+Artifacts:
+
+```text
+reports/deepfactcite_claimfiltered_grpo_ablation_2gpu_20260518.md
+reports/dfc_mixclean200_claimfiltered_outcome_only_2gpu_rollout_summary.md
+reports/dfc_mixclean200_claimfiltered_citation_aware_2gpu_rollout_summary.md
+logs/grpo/rollouts/dfc-mixclean200-claimfiltered-outcome-only-20260518_claimfiltered_2gpu/
+logs/grpo/rollouts/dfc-mixclean200-claimfiltered-citation-aware-20260518_claimfiltered_2gpu/
+```
+
+Observed result:
+
+| Metric | Outcome-Only | Citation-Aware |
+|---|---:|---:|
+| search | 1.0000 | 1.0000 |
+| URL validity | 0.7656 | 0.6979 |
+| citation precision | 0.4219 | 0.3828 |
+| claim support | 0.4219 | 0.3828 |
+| unsupported citation rate | 0.4219 | 0.4844 |
+| fake URL rate | 0.0469 | 0.0521 |
+| mean step response clip ratio | 0.1563 | 0.2813 |
+
+Analysis:
+
+```text
+The run did not justify scaling. The likely failure is data/prompt mismatch:
+some original questions are broad, while the selected supported claim is narrow.
+The model answers the broad question, adds extra facts, and then the citation is
+attached to a local claim that the retrieved snippet does not fully support.
+```
+
+Decision:
+
+```text
+Do not switch to 4 GPUs.
+Do not run longer on the same v1 data.
+Create a stricter one-claim / one-citation dataset with query-length filtering
+and a one-sentence prompt, then run a small repair smoke before any larger
+ablation.
+```
+
+### S-GRPO-001: v2 one-citation data was built as the repair path
+
+Purpose:
+
+```text
+Reduce unsupported broad expansion by making each row a single supported claim
+with one retrieved citation and a one-sentence prompt.
+```
+
+Artifacts:
+
+```text
+data/deepfactcite_sglang_grpo_claim_filtered_v2_onecite/train.parquet
+data/deepfactcite_sglang_grpo_claim_filtered_v2_onecite/test.parquet
+data/deepfactcite_sglang_grpo_claim_filtered_v2_onecite/corpus.jsonl
+data/deepfactcite_sglang_grpo_claim_filtered_v2_onecite/summary.json
+```
+
+Build result:
+
+```text
+kept rows 32
+train/test 28/4
+corpus docs 32
+avg selected citations 1.0
+top-2 URL hit train 28/28, test 4/4
+reject reasons: weak_claim_support 43, query_too_broad 19,
+too_few_supported_claims 3, claim_too_broad 1
+```
+
+Next check:
+
+```text
+Run a short v2 citation-aware smoke. If it reduces unsupported/no-citation/clip
+failures, run the fair v2 outcome-only vs citation-aware ablation. If it does
+not, fix reward or prompt before spending more GPU.
+```
+
+### S-GRPO-002: v2 citation-aware beat v2 outcome-only on the same data
+
+Hypothesis:
+
+```text
+If broad-question over-answering is reduced with one-claim / one-citation data,
+explicit citation/support reward should beat outcome-only reward on citation
+quality while preserving search.
+```
+
+Artifacts:
+
+```text
+reports/deepfactcite_v2_onecite_grpo_ablation_2gpu_20260518.md
+reports/dfc_mixclean200_claimfiltered_v2_onecite_citation_aware_2gpu_rollout_summary.md
+reports/dfc_mixclean200_claimfiltered_v2_onecite_outcome_only_2gpu_rollout_summary.md
+```
+
+Observed result:
+
+| Metric | Outcome-Only | Citation-Aware |
+|---|---:|---:|
+| search | 0.9688 | 1.0000 |
+| URL validity | 0.1562 | 0.7188 |
+| citation precision | 0.1125 | 0.3937 |
+| claim support | 0.1094 | 0.3906 |
+| unsupported citation rate | 0.8438 | 0.3750 |
+| no_citation failures | 27 | 9 |
+| response clip ratio | 0.0000 | 0.0000 |
+
+Analysis:
+
+```text
+This is the first clean positive GRPO signal in the current phase. The key win
+is not raw reward; it is the same-data diagnostic improvement in URL validity,
+support, unsupported rate, and citation count.
+```
+
+Decision:
+
+```text
+v2 data should replace v1 for the next citation GRPO iteration. Do not promote
+to 4 GPUs yet because no checkpoint was saved and no_citation remains 9/32.
+```
+
+### F-GRPO-003: citation-strong weights did not fix citation omission
+
+Hypothesis:
+
+```text
+Increasing citation/support weights should reduce no_citation failures on v2.
+```
+
+Artifacts:
+
+```text
+reports/dfc_mixclean200_v2_onecite_citation_strong_2gpu_rollout_summary.md
+logs/grpo/rollouts/dfc-mixclean200-v2-onecite-citation-strong-20260518_2gpu/
+```
+
+Observed result:
+
+| Metric | Default Citation-Aware | Citation-Strong |
+|---|---:|---:|
+| search | 1.0000 | 1.0000 |
+| URL validity | 0.7188 | 0.7188 |
+| citation precision | 0.3937 | 0.4219 |
+| claim support | 0.3906 | 0.4219 |
+| unsupported citation rate | 0.3750 | 0.4375 |
+| no_citation failures | 9 | 9 |
+| response clip ratio | 0.0000 | 0.0000 |
+
+Analysis:
+
+```text
+Higher citation/support weights improved average support, but no_citation did
+not move and unsupported rate worsened. The remaining failure is more discrete:
+the model sometimes outputs no markdown citation, a bare [S_xxx], [1], or a raw
+URL rather than [label](URL). Scalar reward weights are too blunt for this.
+```
+
+Decision:
+
+```text
+Patch reward/prompt for exact markdown URL citation presence before more
+training. Penalize no-citation and bare-label citations directly. Re-run a
+16-step smoke after that patch.
+```
+
 ### INF-001: Large HF artifact download path matters
 
 Date: 2026-05-18
@@ -888,3 +1100,151 @@ Immediate next step:
 4. Keep fake/unsupported citation hard penalties in the citation-aware reward.
 5. Keep reporting original Search-R1 paper numbers only as external reference
    unless the official E5 setup is reproduced.
+
+### F-GRPO-004: markdown citation parser undercounted labels with nested brackets
+
+Date: 2026-05-18
+
+Expectation:
+
+```text
+Any answer link in the form [label](URL) should count as one markdown citation
+if URL is syntactically valid, even when the label contains ordinary bracketed
+text such as a year.
+```
+
+Observed during the markdown-cap smoke:
+
+```text
+[NCDAS: Substance Abuse and Addiction Statistics [2025]](https://drugabusestatistics.org)
+```
+
+was reported as:
+
+```text
+citation_count = 0
+```
+
+Root cause:
+
+```text
+deepfactcite/reward.py used a flat regex:
+\[([^\[\]]+)\]\(([^()\s]+)\)
+
+That regex rejects link labels containing another '[' or ']'. It can also let
+the inner [2025] be treated as a bare bracket diagnostic if bare-bracket checks
+run on the unstripped answer.
+```
+
+Fix:
+
+```text
+deepfactcite/reward.py now extracts markdown links with a small scanner that
+looks for a closing ] followed by (, so labels with bracketed years are counted.
+It also strips legal markdown links before bare-bracket and raw-URL checks.
+```
+
+Validation:
+
+```text
+Nested-label citation:
+citation_count=1, raw_url_count=0, bare_citation_count=0
+
+Bare [S_1] plus raw URL:
+citation_count=0, raw_url_count=1, bare_citation_count=1
+```
+
+Lesson:
+
+```text
+Reward parsers are part of the experiment. If they are too brittle, GRPO can be
+judged on parser artifacts rather than model behavior.
+```
+
+### F-GRPO-005: first markdown-cap run stopped before the planned 16 steps
+
+Date: 2026-05-18
+
+Run:
+
+```text
+dfc-mixclean200-v2-onecite-markdowncap-20260518_2gpu
+```
+
+Observed:
+
+```text
+rollout_data_step_1.jsonl through rollout_data_step_6.jsonl only
+no traceback / OOM / NCCL error in trainer log
+GPU idle after stop
+```
+
+Partial aggregate:
+
+```text
+samples=12
+steps=6
+reward=0.2319
+search=0.7500
+url_validity=0.2500
+claim_support=0.2083
+unsupported_citation_rate=0.5833
+citation_count=0.4167
+```
+
+After recomputing diagnostics with the fixed parser:
+
+```text
+url_validity=0.3333
+citation_count=0.5000
+no_citation failures changed from 7 to 6
+```
+
+Decision:
+
+```text
+Do not treat this as a comparable 16-step training result. Keep it as debugging
+evidence for the parser issue and rerun a clean 16-step smoke.
+```
+
+### S-GRPO-003: parser-fix markdown-cap rerun launched on v2 one-citation data
+
+Date: 2026-05-18
+
+Run:
+
+```bash
+RUN_TAG=20260518_v2_markdowncap_parserfix2_2gpu \
+MODE=citation-aware \
+EXPERIMENT_NAME=dfc-mixclean200-v2-onecite-markdowncap-parserfix2-20260518_2gpu \
+DATA_DIR=/root/autodl-tmp/Search-R1-DeepFactCite/data/deepfactcite_sglang_grpo_claim_filtered_v2_onecite \
+DRY_RUN=0 \
+GRPO_TOTAL_STEPS=16 \
+bash scripts/deepfactcite/run_sglang_grpo_ablation_2gpu.sh
+```
+
+Launch validation:
+
+```text
+SGLang/GRPO reached async rollout.
+SearchQAVerlTool initialized with the v2 one-citation offline corpus.
+rollout_data_step_1.jsonl was created.
+save_freq=0.
+```
+
+Acceptance criteria:
+
+```text
+no_citation < 9/32
+claim_support > 0.3906
+unsupported_citation_rate <= 0.3750
+search remains near 1.0
+response clip ratio remains 0.0
+```
+
+Decision pending:
+
+```text
+If accepted, clean disk and run a saved 2-GPU checkpoint experiment. If rejected,
+stay on 2 GPUs and improve prompt/data/reward before any 4-GPU scale-up.
+```

@@ -13,10 +13,18 @@ TEST_FILE="${TEST_FILE:-$DATA_DIR/test.parquet}"
 CORPUS="${CORPUS:-$DATA_DIR/corpus.jsonl}"
 ACTOR_MODEL_PATH="${ACTOR_MODEL_PATH:-$REPO_ROOT/outputs/deepfactcite/deepfactcite-sft-qwen3-8b-lora-mix-clean-200-merged-bf16}"
 RUN_TAG="${RUN_TAG:-$(date +%Y%m%d_%H%M%S)}"
+N_GPUS_PER_NODE="${N_GPUS_PER_NODE:-${GRPO_N_GPUS_PER_NODE:-2}}"
+TENSOR_MODEL_PARALLEL_SIZE="${TENSOR_MODEL_PARALLEL_SIZE:-${GRPO_TENSOR_MODEL_PARALLEL_SIZE:-2}}"
+
+if [ "$TENSOR_MODEL_PARALLEL_SIZE" -gt "$N_GPUS_PER_NODE" ]; then
+  echo "TENSOR_MODEL_PARALLEL_SIZE=$TENSOR_MODEL_PARALLEL_SIZE cannot exceed N_GPUS_PER_NODE=$N_GPUS_PER_NODE" >&2
+  exit 1
+fi
 
 case "$MODE" in
   outcome-only)
     EXPERIMENT_NAME="${EXPERIMENT_NAME:-dfc-mixclean200-claimfiltered-outcome-only-$RUN_TAG}"
+    export DFC_REQUIRE_MARKDOWN_CITATION="${DFC_REQUIRE_MARKDOWN_CITATION:-false}"
     export DFC_ANSWER_WEIGHT="${DFC_ANSWER_WEIGHT:-0.80}"
     export DFC_CITATION_WEIGHT="${DFC_CITATION_WEIGHT:-0.00}"
     export DFC_SUPPORT_WEIGHT="${DFC_SUPPORT_WEIGHT:-0.00}"
@@ -26,6 +34,7 @@ case "$MODE" in
     ;;
   citation-aware)
     EXPERIMENT_NAME="${EXPERIMENT_NAME:-dfc-mixclean200-claimfiltered-citation-aware-$RUN_TAG}"
+    export DFC_REQUIRE_MARKDOWN_CITATION="${DFC_REQUIRE_MARKDOWN_CITATION:-true}"
     export DFC_ANSWER_WEIGHT="${DFC_ANSWER_WEIGHT:-0.15}"
     export DFC_CITATION_WEIGHT="${DFC_CITATION_WEIGHT:-0.35}"
     export DFC_SUPPORT_WEIGHT="${DFC_SUPPORT_WEIGHT:-0.30}"
@@ -98,7 +107,7 @@ CMD=(
   actor_rollout_ref.actor.fsdp_config.use_torch_compile=False
   actor_rollout_ref.actor.fsdp_config.param_offload=False
   actor_rollout_ref.actor.fsdp_config.optimizer_offload=True
-  actor_rollout_ref.rollout.tensor_model_parallel_size=2
+  actor_rollout_ref.rollout.tensor_model_parallel_size="$TENSOR_MODEL_PARALLEL_SIZE"
   actor_rollout_ref.rollout.name=sglang
   actor_rollout_ref.rollout.mode=async
   actor_rollout_ref.rollout.n="${GRPO_N:-2}"
@@ -132,7 +141,7 @@ CMD=(
   trainer.logger='["console","tensorboard"]'
   trainer.project_name=DeepFactCite-GRPO
   trainer.experiment_name="$EXPERIMENT_NAME"
-  trainer.n_gpus_per_node=2
+  trainer.n_gpus_per_node="$N_GPUS_PER_NODE"
   trainer.nnodes=1
   trainer.default_local_dir="$SAVE_PATH"
   trainer.save_freq="${GRPO_SAVE_FREQ:-0}"
@@ -151,9 +160,17 @@ echo "corpus=$CORPUS"
 echo "save_path=$SAVE_PATH"
 echo "rollout_dir=$ROLLOUT_DIR"
 echo "log=$LOG_FILE"
+echo "cuda_visible_devices=$CUDA_VISIBLE_DEVICES"
+echo "n_gpus_per_node=$N_GPUS_PER_NODE"
+echo "tensor_model_parallel_size=$TENSOR_MODEL_PARALLEL_SIZE"
 echo "weights answer=$DFC_ANSWER_WEIGHT citation=$DFC_CITATION_WEIGHT support=$DFC_SUPPORT_WEIGHT format=$DFC_FORMAT_WEIGHT search=$DFC_SEARCH_WEIGHT cost=$DFC_COST_WEIGHT"
 df -h /root/autodl-tmp
-nvidia-smi --query-gpu=index,memory.used,memory.total,utilization.gpu --format=csv,noheader
+NVIDIA_SMI_BIN="$(command -v nvidia-smi || true)"
+if [ -n "$NVIDIA_SMI_BIN" ] && [ -x "$NVIDIA_SMI_BIN" ]; then
+  "$NVIDIA_SMI_BIN" --query-gpu=index,memory.used,memory.total,utilization.gpu --format=csv,noheader || true
+else
+  echo "nvidia-smi not executable or not found; GPU audit skipped"
+fi
 
 if [ "${DRY_RUN:-1}" != "0" ]; then
   printf 'DRY_RUN=1; command not executed. To run: DRY_RUN=0 MODE=%q bash %q\n' "$MODE" "$0"

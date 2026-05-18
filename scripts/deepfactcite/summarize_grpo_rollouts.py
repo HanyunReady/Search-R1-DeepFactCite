@@ -11,6 +11,7 @@ from typing import Any
 
 
 METRIC_KEYS = [
+    "reward",
     "total",
     "answer_subem",
     "format",
@@ -29,14 +30,22 @@ def main() -> None:
     parser.add_argument("rollout_dir")
     parser.add_argument("--out", default="")
     parser.add_argument("--failure-samples", type=int, default=12)
+    parser.add_argument(
+        "--recompute-details",
+        action="store_true",
+        help="Recompute diagnostic details from saved responses with the current reward code. The logged reward is preserved.",
+    )
     args = parser.parse_args()
 
     rollout_dir = Path(args.rollout_dir)
     rows = read_rollouts(rollout_dir)
     if not rows:
         raise SystemExit(f"No rollout rows found under {rollout_dir}")
+    if args.recompute_details:
+        rows = recompute_details(rows)
 
     summary = summarize(rows, args.failure_samples)
+    summary["details_recomputed"] = args.recompute_details
     text = render_markdown(rollout_dir, summary)
     if args.out:
         Path(args.out).write_text(text, encoding="utf-8")
@@ -58,10 +67,22 @@ def read_rollouts(rollout_dir: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def recompute_details(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    from deepfactcite.reward import explain_score
+
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        updated = dict(row)
+        ground_truth = row.get("ground_truth", {}) if isinstance(row.get("ground_truth"), dict) else {}
+        updated["details"] = explain_score(str(row.get("response", "")), ground_truth)
+        out.append(updated)
+    return out
+
+
 def summarize(rows: list[dict[str, Any]], failure_samples: int) -> dict[str, Any]:
     metrics: dict[str, float] = {}
     for key in METRIC_KEYS:
-        values = [float(row.get("details", {}).get(key, row.get("reward", 0.0))) for row in rows if has_metric(row, key)]
+        values = [metric_value(row, key) for row in rows if has_metric(row, key)]
         metrics[key] = mean(values) if values else 0.0
 
     by_step: dict[int, list[dict[str, Any]]] = defaultdict(list)
@@ -127,12 +148,18 @@ def render_markdown(rollout_dir: Path, summary: dict[str, Any]) -> str:
         "",
         f"- Samples: {summary['samples']}",
         f"- Steps: {summary['steps']}",
-        "",
-        "## Aggregate Metrics",
-        "",
-        "| Metric | Mean |",
-        "|---|---:|",
     ]
+    if summary.get("details_recomputed"):
+        lines.append("- Diagnostic details recomputed with the current reward code; logged `reward` is preserved.")
+    lines.extend(
+        [
+            "",
+            "## Aggregate Metrics",
+            "",
+            "| Metric | Mean |",
+            "|---|---:|",
+        ]
+    )
     for key in METRIC_KEYS:
         lines.append(f"| {key} | {summary['metrics'].get(key, 0.0):.4f} |")
 
@@ -160,9 +187,19 @@ def render_markdown(rollout_dir: Path, summary: dict[str, Any]) -> str:
 
 
 def has_metric(row: dict[str, Any], key: str) -> bool:
+    if key == "reward":
+        return "reward" in row
     if key == "total":
         return "reward" in row or "total" in row.get("details", {})
     return key in row.get("details", {})
+
+
+def metric_value(row: dict[str, Any], key: str) -> float:
+    if key == "reward":
+        return float(row.get("reward", 0.0))
+    if key == "total":
+        return float(row.get("details", {}).get("total", row.get("reward", 0.0)))
+    return float(row.get("details", {}).get(key, 0.0))
 
 
 def metric_mean(rows: list[dict[str, Any]], key: str) -> float:
