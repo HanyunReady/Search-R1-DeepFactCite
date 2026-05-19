@@ -52,7 +52,9 @@ URL 真实，也不代表它支撑了 URL 前面的那句话。
 - 因为搜索库、检索器和基座模型都不同，本文档里的结果按“本地同环境 benchmark”理解，不和 Search-R1 论文表格做直接因果比较。
 - 没有必要为了本项目强行照搬 Search-R1 的重型 E5 / Wikipedia / ANN / BM25 工程栈；复现成本高、变量多，换到 Qwen3 和引用任务后不一定提升 claim support。
 - 已跑通 Qwen3-8B SFT、Search-R1 风格 BM25 防护评测、DeepFactCite 引用评测、SGLang/veRL GRPO 路径。
-- 在当前本地 benchmark 上，MixClean200 SFT 已达到有竞争力的准确率：Search-R1 BM25 200 的 `answer_subem=0.490`、`search_success=1.000`，ShortQA32 的 `answer_subem=0.500`。
+- 在当前本地 benchmark 上，MixClean200 SFT 已达到有竞争力的准确率：Search-R1 BM25 200 的 `answer_subem=0.490`、`search_success=1.000`，ShortQA32 的 `answer_subem=0.500`。（`answer_subem=0.490` 表示 200 道 NQ/HotpotQA 风格题里约 49% 的回答包含标准答案；`search_success=1.000` 表示全部样本都成功发起搜索；ShortQA32 的 `answer_subem=0.500` 表示 32 道短问答约一半命中。）
+- 和 Search-R1 论文里最相近的 NQ/HotpotQA 场景相比，本项目结果在同一量级：Search-R1 Qwen2.5-7B-base 报告 NQ `EM=0.480`、HotpotQA `EM=0.433`；本项目 Qwen3-8B MixClean200 在本地 BM25 200 上是 NQ `subEM=0.500`、HotpotQA `subEM=0.480`。注意这里一个是论文 E5 检索 + EM，一个是本地 BM25 + subEM，只能说明“没有明显低一个量级”，不能直接宣称胜负。
+- 粗略看，差异会双向影响数字：E5 dense retrieval 通常更擅长语义匹配，可能比 BM25 更容易找回改写后的相关段落；但 `subEM` 比严格 `EM` 宽松，可能把“答案出现在长句里”也算命中；另外 Qwen3-8B 比 Qwen2.5-7B 更新且更大，本地 200 题子集也比论文完整 benchmark 更小。因此这些因素有的压低、有的抬高分数，最稳妥的结论就是“量级接近，可以作为答案/搜索能力没有崩掉的证据”。
 - 4 GPU saved GRPO 的工程链路已经成立，但当前 saved32 checkpoint 还不能作为最终效果提升结论。
 
 ## Search-R1 到底干了什么
