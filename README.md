@@ -1,275 +1,442 @@
-# Search-R1: Train your LLMs to reason and call a search engine with reinforcement learning
+# Search-R1-DeepFactCite
 
-<div align="center">
-  <img src="https://raw.githubusercontent.com/PeterGriffinJin/Search-R1/main/public/logo.png" alt="logo" width="300"/>
-</div>
+面向新手的中文项目文档。原始 Search-R1 英文 README 已归档在
+`docs/english_originals/README.md`。
 
-<p align="center">
-  <a href="https://arxiv.org/abs/2503.09516">
-    <img src="https://img.shields.io/badge/Paper1-blue?style=for-the-badge" alt="Button1"/>
-  </a>
-  <a href="https://arxiv.org/abs/2505.15117">
-    <img src="https://img.shields.io/badge/Paper2-green?style=for-the-badge" alt="Button2"/>
-  </a>
-  <a href="https://huggingface.co/collections/PeterJinGo/search-r1-67d1a021202731cb065740f5">
-    <img src="https://img.shields.io/badge/Resources-orange?style=for-the-badge" alt="Button3"/>
-  </a>
-  <a href="https://x.com/BowenJin13/status/1895544294473109889">
-    <img src="https://img.shields.io/badge/Tweet-red?style=for-the-badge" alt="Button4"/>
-  </a>
-  <a href="https://wandb.ai/peterjin/Search-R1-v0.2">
-    <img src="https://img.shields.io/badge/Logs-purple?style=for-the-badge" alt="Button5"/>
-  </a>
-</p>
+本项目基于 [Search-R1](https://github.com/PeterGriffinJin/Search-R1) 和
+[veRL](https://github.com/volcengine/verl)，目标是训练一个会搜索、会读证据、
+会给可信引用的开放域问答智能体。
 
+一句话概括：
 
-<!-- <strong>Search-R1</strong> is a reinforcement learning framework for <em>training reasoning and searching (tool-call) interleaved LLMs</em>.  -->
-<!-- We built upon [veRL](https://github.com/volcengine/verl). -->
-**Search-R1** is a reinforcement learning framework designed for training **reasoning-and-searching interleaved LLMs**—language models that learn to reason and make tool calls (e.g., to search engines) in a coordinated manner.
+```text
+Search-R1 教模型学会“边想边搜索”；
+本项目在这个基础上继续教模型“引用必须真实，而且要真的支持答案里的那句话”。
+```
 
-<!-- It can be seen as an extension of <strong>DeepSeek-R1(-Zero)</strong> with interleaved search engine calling and an opensource RL training-based solution for <strong>OpenAI DeepResearch</strong>. -->
-Built upon [veRL](https://github.com/volcengine/verl), Search-R1 extends the ideas of **DeepSeek-R1(-Zero)** by incorporating interleaved search engine access and provides a fully open-source RL training pipeline. It serves as an alternative and open solution to **OpenAI DeepResearch**, enabling research and development in tool-augmented LLM reasoning.
+## 先看结论
 
-<!-- Through RL (rule-based outcome reward), the 3B **base** LLM (both Qwen2.5-3b-base and Llama3.2-3b-base) develops reasoning and search engine calling abilities all on its own. -->
+Search-R1 解决的是：
 
-We support different RL methods (e.g., PPO, GRPO, reinforce), different LLMs (e.g., llama3, Qwen2.5, etc) and different search engines (e.g., local sparse/dense retrievers and online search engines).
+```text
+问题来了
+-> 模型自己决定搜什么
+-> 检索器返回资料
+-> 模型继续推理或继续搜索
+-> 最后回答
+-> 用答案是否正确等规则奖励做强化学习
+```
 
-Paper: [link1](https://arxiv.org/pdf/2503.09516), [link2](https://arxiv.org/abs/2505.15117); Model and data: [link](https://huggingface.co/collections/PeterJinGo/search-r1-67d1a021202731cb065740f5); Twitter thread: [link](https://x.com/BowenJin13/status/1895544294473109889); Full experiment log: [prelim](https://wandb.ai/peterjin/Search-R1-open); [v0.1](https://wandb.ai/peterjin/Search-R1-nq_hotpotqa_train); [v0.2](https://wandb.ai/peterjin/Search-R1-v0.2); [v0.3](https://wandb.ai/peterjin/Search-R1-v0.3). Details about these logs and methods can be find [here](https://github.com/PeterGriffinJin/Search-R1/blob/main/docs/experiment_log.md).
+它把大模型从“被动读 RAG 塞进来的文档”变成“主动调用搜索工具的智能体”。
 
+本项目 Search-R1-DeepFactCite 继续解决的是：
 
-![single-turn](public/main.png)
+```text
+答案看起来对，不代表引用可信。
+URL 真实，也不代表它支撑了 URL 前面的那句话。
+```
 
-## News
+所以本项目把训练目标从“答对问题”扩展成：
 
-- [2025.10] Search-R1 is featured by Thinking Machines Lab's first product [Tinker](https://github.com/thinking-machines-lab/tinker-cookbook)! Details: [Document](https://github.com/thinking-machines-lab/tinker-cookbook/tree/main/tinker_cookbook/recipes/tool_use/search).
-- [2025.7] Search-R1 is supported by [SkyRL](https://github.com/NovaSky-AI/SkyRL)! Detailed instructions: [code](https://github.com/NovaSky-AI/SkyRL/tree/main/skyrl-train/examples/search), [Document](https://novasky-ai.notion.site/skyrl-searchr1).
-- [2025.6] Search-R1 is now integrated into the latest version of veRL and can take advantage of its most up-to-date features! Detailed instructions: [veRL](https://verl.readthedocs.io/en/latest/sglang_multiturn/search_tool_example.html), [English Document](https://github.com/zhaochenyang20/Awesome-ML-SYS-Tutorial/blob/main/rlhf/verl/multi-turn/tool_examples/verl-multiturn-searchR1-like.md), [Chinese Document](https://github.com/zhaochenyang20/Awesome-ML-SYS-Tutorial/blob/main/rlhf/verl/multi-turn/tool_examples/verl-multiturn-searchR1-like_ZH.md).
-- [2025.5] The second [paper](https://arxiv.org/abs/2505.15117) conducting detailed empirical studies is published with logs: [v0.3](https://wandb.ai/peterjin/Search-R1-v0.3). 
-- [2025.4] We support [multinode](https://github.com/PeterGriffinJin/Search-R1/blob/main/docs/multinode.md) training for 30B+ LLMs!
-- [2025.4] We support [different search engines](https://github.com/PeterGriffinJin/Search-R1/blob/main/docs/retriever.md) including sparse local retriever, dense local retriever with ANN indexing and online search engines!
-- [2025.3] The first Search-R1 [paper](https://arxiv.org/pdf/2503.09516) is published with the logs: [v0.1](https://wandb.ai/peterjin/Search-R1-nq_hotpotqa_train); [v0.2](https://wandb.ai/peterjin/Search-R1-v0.2).
-- [2025.2] We opensource Search-R1 codebase with [preliminary results](https://wandb.ai/peterjin/Search-R1-open).
+```text
+答对问题 + 搜到证据 + URL 来自当前搜索结果 + citation 附近的 claim 被证据支持
+```
 
-## Links
+当前项目定位要讲清楚：
 
-- [Installation](#installation)
-- [Quick start](#quick-start)
-- [Preliminary results](#preliminary-results)
-- [Inference](#inference)
-- [Use your own dataset](#use-your-own-dataset)
-- [Use your own search engine](#use-your-own-search-engine)
-- [Features](#features)
-- [Ackowledge](#acknowledge)
-- [Citations](#citations)
+- 不能简单宣称“击败 Search-R1”。
+- 更准确的说法是：本项目在 Search-R1 风格搜索智能体上增加了引用真实性和声明级支持训练。
+- 本项目的搜索库、检索器和基座模型都不同于原始 Search-R1，因此评测应按“本地同环境 benchmark”理解，而不是和论文表格做直接因果比较。
+- 没有必要为了本项目强行复现 Search-R1 的重型搜索库；那套 E5 / Wikipedia / ANN 或 BM25 工程栈复现成本高、变量多，换到 Qwen3 和引用任务后效果也不一定更好。
+- 已跑通 Qwen3-8B SFT、Search-R1 风格 BM25 防护评测、DeepFactCite 引用评测、SGLang/veRL GRPO 路径。
+- 在当前本地 benchmark 上，MixClean200 SFT 已达到有竞争力的准确率：Search-R1 BM25 200 的 `answer_subem=0.490`、`search_success=1.000`，ShortQA32 的 `answer_subem=0.500`。
+- 4 GPU saved GRPO 的工程链路已经成立，但当前 saved32 checkpoint 还不能作为最终效果提升结论。
 
-## Installation
+## Search-R1 到底干了什么
 
-### Search-r1 environment
+很多人第一次看 Search-R1 会把它理解成“RAG 加强化学习”。这个理解不够准确。
+
+普通 RAG 通常是系统先搜好文档，再把文档塞进 prompt：
+
+```text
+用户问题
+-> 系统检索 top-k 文档
+-> LLM 根据这些文档回答
+```
+
+Search-R1 更像是在训练一个会用搜索工具的学生：
+
+```text
+用户问题
+-> 模型先想一想
+-> 模型自己写搜索 query
+-> 搜索工具返回 information
+-> 模型阅读 information
+-> 模型决定继续搜索还是回答
+-> reward 根据最终答案和轨迹质量打分
+-> RL 鼓励更好的搜索和回答策略
+```
+
+Search-R1 的核心贡献可以拆成 5 点：
+
+| 点 | 小白版解释 | 技术含义 |
+|---|---|---|
+| 1. 主动搜索 | 模型不是等别人喂资料，而是自己决定搜什么 | search action 由 policy 生成 |
+| 2. 多轮交互 | 一次搜不够，可以继续搜 | interleaved reasoning and search |
+| 3. 工具协议 | 用标签区分思考、搜索、工具返回和答案 | `<think>`、`<search>`、`<information>`、`<answer>` |
+| 4. 强化学习 | 不直接标注每一步怎么搜，而是用结果奖励训练 | PPO / GRPO / reinforce 等 |
+| 5. 可替换检索器 | 可以接本地稀疏/稠密检索，也可以接在线搜索 | `/retrieve` API |
+
+Search-R1 论文中强调：只是在推理时 prompt 模型“你可以用搜索”并不够，因为模型并没有真正学会怎样和搜索引擎交互。Search-R1 用 RL 让模型在逐步推理时学会自己生成一个或多个搜索查询，并利用实时检索结果完成问答。
+
+### 为什么本项目没有照搬 Search-R1 的重型搜索库
+
+原始 Search-R1 常见设置依赖较完整的开放域检索栈，例如 Wikipedia 语料、E5 向量索引、FAISS / ANN、Pyserini / BM25，以及对应的检索服务。这个路线适合复现论文里的开放域 QA，但对本项目不一定是最优投入。
+
+原因有三点：
+
+| 原因 | 说明 |
+|---|---|
+| 搜索库不一样 | 本项目要验证的是 DeepFactCite 引用可信，语料必须保留 URL 和 citation evidence；原 Search-R1 的检索库主要服务 NQ/HotpotQA 答案命中 |
+| 基模不一样 | 原始 Search-R1 结果主要基于 Qwen2.5 / Llama3.2，本项目主线是 Qwen3-8B，不能把模型差异混进结论 |
+| 复现成本高 | 大规模索引、检索环境、版本 pin、GPU/CPU 资源都会引入额外变量，投入很重，但不保证提升 citation support |
+
+因此本项目采用更可控的策略：
+
+```text
+用轻量、可审计、带 URL 的检索库验证引用训练；
+再用 Search-R1 BM25 200 / ShortQA32 / DeepFactCite strict47 做同环境 benchmark。
+```
+
+这不是降低标准，而是把实验变量收窄。只要同一个检索环境、同一套 prompt、同一套评测脚本下，模型能达到有竞争力的答案准确率，同时改善引用真实性，这个结论就更干净。
+
+参考资料：
+
+- Search-R1 论文：https://arxiv.org/abs/2503.09516
+- Search-R1 代码：https://github.com/PeterGriffinJin/Search-R1
+
+## 本项目相比 Search-R1 改进了什么
+
+Search-R1 主要优化答案正确性和搜索行为。本项目继续问一个更细的问题：
+
+```text
+模型给出的引用，真的可信吗？
+```
+
+举个简单例子。
+
+检索结果只说：
+
+```text
+某洞穴有旧石器时代壁画。
+URL: https://example.org/cave
+```
+
+模型回答：
+
+```text
+这个洞穴是欧洲最早发现的、保存最完整的史前艺术遗址之一 [source](https://example.org/cave)。
+```
+
+这个 URL 可能是真的，但检索片段并没有支持“最早发现”“保存最完整”这些更强的说法。普通答案奖励可能看不出问题，本项目的 citation-aware reward 会把它当成低质量引用。
+
+### 改进 1：从“会搜索”升级到“会可信引用”
+
+Search-R1 关注：
+
+```text
+模型有没有学会搜索？
+答案有没有命中 gold answer？
+```
+
+本项目额外关注：
+
+```text
+答案里的 markdown citation 是否存在？
+URL 是否来自当前检索轨迹？
+citation 前后的 claim 是否被对应 snippet 支持？
+有没有裸 [1]、裸 [S_xxx] 或模型编造的 raw URL？
+```
+
+### 改进 2：新增 DeepFactCite reward
+
+核心代码在 `deepfactcite/reward.py`。
+
+reward 不只看答案，还看这些指标：
+
+| 指标 | 检查什么 | 为什么重要 |
+|---|---|---|
+| `answer_subem` | 答案是否覆盖目标答案 | 防止只学引用格式却不回答问题 |
+| `search` | 是否先搜索、搜索是否超预算 | 保留 Search-R1 搜索能力 |
+| `format` | 标签结构是否正确 | 训练轨迹要能解析 |
+| `url_validity` | URL 是否来自工具返回 | 防止编造链接 |
+| `citation_precision` | 引用附近 claim 是否被支持 | 防止真实链接乱贴 |
+| `claim_support` | claim 和证据片段的支持度 | 衡量引用忠实性 |
+| `unsupported_citation_rate` | 不受支持的引用比例 | 本项目最想降低的错误 |
+| `cost` | 输出长度和搜索成本 | 防止无限长回答或乱搜 |
+
+直觉上，reward 在告诉模型：
+
+```text
+只答对不够。
+只贴链接也不够。
+必须把正确链接放在它真正能支持的那句话旁边。
+```
+
+### 改进 3：新增 DeepFactCite 数据构建
+
+核心脚本：
+
+```text
+scripts/deepfactcite/prepare_data.py
+scripts/deepfactcite/build_sft_mix.py
+scripts/deepfactcite/prepare_sglang_grpo_claim_filtered.py
+```
+
+数据处理做了几件事：
+
+- 从 DeepCiteFact 轨迹构建 Search-R1 风格 SFT/RL parquet。
+- 把原始轨迹里的 `<google_search>`、`<tool_response>` 对齐到 `<search>`、`<information>`。
+- 过滤掉 URL 不真实、claim support 太弱、unsupported citation 太多的 SFT 样本。
+- 构造 one-citation GRPO 小数据，用来干净地验证 citation-aware reward 是否有效。
+
+这里的 one-citation 数据不是最终大规模训练集，而是一个受控实验：
+
+```text
+如果每个样本只要求 1 条窄 claim 和 1 个真实 URL，
+模型能不能学会把 citation 放对？
+```
+
+### 改进 4：检索结果必须带 URL
+
+Search-R1 原始任务里，检索片段主要用于回答问题。本项目要训练引用，因此检索返回必须保留 URL。
+
+相关代码：
+
+```text
+deepfactcite/retriever_server.py
+scripts/deepfactcite/start_lexical_retriever.sh
+scripts/deepfactcite/serve_searchr1_bm25.py
+```
+
+边界非常重要：
+
+```text
+模型只能生成 <search> 和 <answer>。
+<information> 必须由检索环境注入。
+模型不能自己编造工具返回。
+```
+
+如果模型能自己写 `<information>`，它就能伪造网页标题、URL 和摘要，引用训练会失去意义。
+
+### 改进 5：建立 answer/search 防护评测
+
+训练引用能力时，很容易把原本的问答能力训坏。所以本项目不只看引用指标，还保留 Search-R1 风格防护评测。
+
+主要评测有三类：
+
+| 评测 | 用途 |
+|---|---|
+| `Search-R1 BM25 200` | 检查 NQ/HotpotQA 风格答案和搜索能力是否退化 |
+| `ShortQA32` | 检查短答案、搜索和引用基础行为 |
+| `DeepFactCite strict47` | 检查长答案引用真实性、URL validity 和 claim support |
+
+当前 MixClean200 SFT baseline 在本地 BM25 防护评测上比 Base 更稳定：
+
+| 模型 | Answer subEM | Search Success | Search Turns |
+|---|---:|---:|---:|
+| Base Qwen3-8B | 0.290 | 0.960 | 1.720 |
+| Soft SFT 100 | 0.450 | 0.990 | 1.195 |
+| MixClean SFT 200 | 0.490 | 1.000 | 1.160 |
+
+这说明 SFT 没有只学会“贴链接”，也保住了 Search-R1 风格的搜索问答行为。
+
+这里的数字不是原始 Search-R1 论文设置的直接复现，因为搜索库、检索器和基模都不同。它的意义是本地同环境对比：在相同 benchmark 和检索服务下，本项目模型已经有竞争力的答案准确率，后续 citation-aware 训练不能以牺牲这条基线为代价。
+
+### 改进 6：做 outcome-only vs citation-aware 消融
+
+为了证明“引用奖励真的有用”，本项目做了对照实验。
+
+同一份 v2 one-citation 数据上：
+
+| Metric | Outcome-Only | Citation-Aware |
+|---|---:|---:|
+| URL validity | 0.1562 | 0.7188 |
+| citation precision | 0.1125 | 0.3937 |
+| claim support | 0.1094 | 0.3906 |
+| unsupported citation rate | 0.8438 | 0.3750 |
+| citation count | 0.1562 | 0.7188 |
+
+结论很清楚：
+
+```text
+只看最终答案的 reward 不足以学好引用；
+显式 citation/support reward 能明显改善引用行为。
+```
+
+v3 prompt-fix 进一步把 markdown citation 要求写清楚，在小规模 no-save 诊断中把 URL validity、claim support 提高到更可用的水平。但 saved checkpoint 的最终有效性仍要以 held-out eval 为准。
+
+## 新手怎么理解整个流程
+
+可以把训练模型想象成教学生开卷考试。
+
+Search-R1 教的是：
+
+```text
+不会就去查资料；
+查资料时自己想关键词；
+查完再回答。
+```
+
+本项目继续教的是：
+
+```text
+你引用的资料必须真的来自这次查到的资料；
+你引用的资料必须支撑旁边那句话；
+证据不够就少说，不能硬编。
+```
+
+一条训练轨迹长这样：
+
+```text
+User: 问题
+
+Assistant:
+<think>我需要查证这个事实。</think>
+<search>搜索关键词</search>
+
+Environment:
+<information>
+<snippet id=S_1>
+Title: ...
+URL: https://...
+Text: ...
+</snippet>
+</information>
+
+Assistant:
+<answer>被证据支持的回答 [source](https://...).</answer>
+```
+
+reward 会检查：
+
+```text
+有没有搜索？
+有没有最终答案？
+URL 是不是工具返回过的？
+citation 前面的 claim 是否被这个 URL 的片段支持？
+格式是不是可解析？
+回答是不是过长或乱搜？
+```
+
+## 目录怎么读
+
+建议按这个顺序读：
+
+1. `README.md`：先理解项目目标和 Search-R1 对比。
+2. `docs/project_report.md`：看完整项目报告、实验结论和复现路径。
+3. `docs/deepfactcite_grpo.md`：看 DeepFactCite-GRPO 的训练入口。
+4. `docs/deepfactcite_experiment_record_20260518.md`：看实验过程和失败记录。
+5. `reports/searchr1_core_bm25_eval_summary.md`：看答案/搜索防护评测。
+6. `docs/deepfactcite_reproducibility_issue_log.md`：看为什么不能只保留成功实验。
+
+核心代码：
+
+```text
+deepfactcite/
+  prompts.py              # 搜索引用 prompt
+  reward.py               # citation-aware reward
+  retriever_server.py     # 轻量词汇检索器
+
+scripts/deepfactcite/
+  prepare_data.py                         # DeepCiteFact -> SFT/RL 数据
+  build_sft_mix.py                        # 构建 MixClean SFT
+  prepare_sglang_grpo_claim_filtered.py   # one-citation GRPO 数据
+  train_sft_qwen3.sh                      # Qwen3 LoRA SFT
+  merge_lora_adapter.py                   # LoRA 合并
+  eval_citation_agent_vllm.py             # 引用评测
+  eval_searchr1_agent_vllm.py             # Search-R1 风格评测
+  run_sglang_grpo_v3_promptfix_4gpu_saved.sh
+  summarize_grpo_rollouts.py
+```
+
+## 最小复现路径
+
+准备 DeepFactCite 数据：
+
 ```bash
-conda create -n searchr1 python=3.9
-conda activate searchr1
-# install torch [or you can skip this step and let vllm to install the correct version for you]
-pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cu121
-# install vllm
-pip3 install vllm==0.6.3 # or you can install 0.5.4, 0.4.2 and 0.3.1
-
-# verl
-pip install -e .
-
-# flash attention 2
-pip3 install flash-attn --no-build-isolation
-pip install wandb
+python scripts/deepfactcite/prepare_data.py \
+  --deepcitefact-dir /root/autodl-tmp/DeepCiteFact \
+  --output-dir data/deepfactcite
 ```
 
-### Retriever environment (optional)
-If you would like to call a local retriever as the search engine, you can install the environment as follows. (We recommend using a seperate environment.)
+启动轻量检索器：
+
 ```bash
-conda create -n retriever python=3.10
-conda activate retriever
-
-# we recommend installing torch with conda for faiss-gpu
-conda install pytorch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 pytorch-cuda=12.1 -c pytorch -c nvidia
-pip install transformers datasets pyserini
-
-## install the gpu version faiss to guarantee efficient RL rollout
-conda install -c pytorch -c nvidia faiss-gpu=1.8.0
-
-## API function
-pip install uvicorn fastapi
+CORPUS=data/deepfactcite/corpus.jsonl PORT=8000 \
+  bash scripts/deepfactcite/start_lexical_retriever.sh
 ```
 
+训练 Qwen3-8B LoRA SFT：
 
-## Quick start
-
-Train a reasoning + search LLM on NQ dataset with e5 as the retriever and wikipedia as the corpus.
-
-(1) Download the indexing and corpus.
 ```bash
-save_path=/the/path/to/save
-python scripts/download.py --save_path $save_path
-cat $save_path/part_* > $save_path/e5_Flat.index
-gzip -d $save_path/wiki-18.jsonl.gz
+MODEL_SIZE=8B \
+N_GPUS=2 \
+TOTAL_STEPS=200 \
+DATA_DIR=data/deepfactcite_mix/sft \
+EXPERIMENT_NAME=deepfactcite-sft-qwen3-8b-lora-mix-clean-200 \
+  bash scripts/deepfactcite/train_sft_qwen3.sh
 ```
 
-(2) Process the NQ dataset.
+构建 v3 one-citation GRPO 数据：
+
 ```bash
-python scripts/data_process/nq_search.py
+python scripts/deepfactcite/prepare_sglang_grpo_claim_filtered.py \
+  --rows 32 \
+  --out-dir data/deepfactcite_sglang_grpo_claim_filtered_v3_promptfix_onecite \
+  --max-citations 1 \
+  --max-claim-tokens 30 \
+  --max-query-tokens 18 \
+  --max-answer-sentences 1 \
+  --strict-one-citation-prompt \
+  --citation-format-template
 ```
 
-(3) Launch a local retrieval server.
+先 dry-run 4 GPU GRPO 命令：
+
 ```bash
-conda activate retriever
-bash retrieval_launch.sh
+bash scripts/deepfactcite/run_sglang_grpo_v3_promptfix_4gpu_saved.sh
 ```
 
-(4) Run RL training (PPO) with Llama-3.2-3b-base.
+真正训练时显式关闭 dry-run：
+
 ```bash
-conda activate searchr1
-bash train_ppo.sh
+DRY_RUN=0 \
+GRPO_TOTAL_STEPS=32 \
+GRPO_SAVE_FREQ=32 \
+GRPO_N=4 \
+EXPERIMENT_NAME=dfc-mixclean200-v3-promptfix-onecite-20260519_4gpu_n4_saved32 \
+  bash scripts/deepfactcite/run_sglang_grpo_v3_promptfix_4gpu_saved.sh
 ```
 
-## Preliminary results
+## 关键术语
 
-(1) The base model (llama3.2-3b-base) learns to call the search engine and obtain improved performance.
+| 术语 | 小白解释 |
+|---|---|
+| RAG | 先检索资料，再让模型根据资料回答 |
+| Search Agent | 模型自己决定什么时候搜索、搜什么、什么时候停止 |
+| SFT | 监督微调，先让模型模仿正确格式和轨迹 |
+| GRPO | 强化学习方法，同一个问题生成多条答案，奖励更好的那条 |
+| rollout | 一条完整交互轨迹，包括搜索、工具返回和答案 |
+| citation | 答案里的引用，比如 `[source](https://...)` |
+| URL validity | URL 是否来自当前检索结果 |
+| claim support | 引用旁边那句话是否被所引片段支持 |
+| unsupported citation | 链接是真的，但不能支撑当前说法 |
+| guardrail eval | 防护评测，确认新能力没有把旧能力训坏 |
 
-![llama-3b](public/llama32-3b.png)
+## 当前限制
 
-
-(2) The base model (Qwen2.5-7b-base) can learn to conduct multi-turn search engine calling and reasoning with RL.
-
-![multi-turn](public/multi-turn.png)
-
-## Inference
-#### You can play with the trained Search-R1 model with your own question.
-(1) Launch a local retrieval server.
-```bash
-conda activate retriever
-bash retrieval_launch.sh
-```
-
-(2) Run inference.
-```bash
-conda activate searchr1
-python infer.py
-```
-You can modify the ```question``` on line 7 to something you're interested in.
-
-## Use your own dataset
-
-### QA data
-For each question-answer sample, it should be a dictionary containing the desired content as below:
-
-```
-data = {
-        "data_source": data_source,
-        "prompt": [{
-            "role": "user",
-            "content": question,
-        }],
-        "ability": "fact-reasoning",
-        "reward_model": {
-            "style": "rule",
-            "ground_truth": solution
-        },
-        "extra_info": {
-            'split': split,
-            'index': idx,
-        }
-    }
-```
-
-You can refer to ```scripts/data_process/nq_search.py``` for a concrete data processing example.
-
-### Corpora
-
-It is recommended to make your corpus a jsonl file, where each line (a dictionary with "id" key and "contents" key) corresponds to one passage. You can refer to ```example/corpus.jsonl``` for an example.
-
-The "id" key corresponds to the passage id, while the "contents" key corresponds to the passage content ('"' + title + '"\n' + text).
-For example:
-```
-{"id": "0", "contents": "Evan Morris Evan L. Morris (January 26, 1977 \u2013 July 9, 2015) was a lobbyist for Genentech and its parent corporation Roche in Washington."}
-...
-{"id": "100", "contents": "Three years later, when the United States Exploring Expedition to little-known portions of the globe was organised under Charles Wilkes, Hale was recommended, while yet an undergraduate."}
-...
-```
-
-**Index your corpora (optional).**
-If you would like to use a local retriever as the search engine, you can index your own corpus by:
-```
-bash search_r1/search/build_index.sh
-```
-You can change ```retriever_name``` and ```retriever_model``` to your interested off-the-shelf retriever.
-
-## Use your own search engine
-
-Our codebase supports local sparse retriever (e.g., BM25), local dense retriever (both flat indexing with GPUs and ANN indexing with CPUs) and online search engine (e.g., Google, Bing, etc). More details can be found [here](https://github.com/PeterGriffinJin/Search-R1/tree/main/docs/retriever.md).
-
-The main philosophy is to launch a local or remote search engine server separately from the main RL training pipeline. 
-
-The LLM can call the search engine by calling the search API (e.g., "http://127.0.0.1:8000/retrieve").
-
-You can refer to ```search_r1/search/retriever_server.py``` for an example of launching a local retriever server.
-
-## Features
-- Support local sparse retrievers (e.g., BM25). ✔️
-- Support local dense retrievers (both flat indexing and ANN indexing) ✔️
-- Support google search / bing search / brave search API and others. ✔️
-- Support off-the-shelf neural rerankers. ✔️
-- Support different RL methods (e.g., PPO, GRPO, reinforce). ✔️
-- Support different LLMs (e.g., llama3, Qwen2.5, etc). ✔️
-
-## Acknowledge
-
-The concept of Search-R1 is inspired by [Deepseek-R1](https://github.com/deepseek-ai/DeepSeek-R1) and [TinyZero](https://github.com/Jiayi-Pan/TinyZero/tree/main).
-Its implementation is built upon [veRL](https://github.com/volcengine/verl) and [RAGEN](https://github.com/ZihanWang314/RAGEN/tree/main). 
-We sincerely appreciate the efforts of these teams for their contributions to open-source research and development.
-
-## Awesome work powered or inspired by Search-R1
-
-- [DeepResearcher](https://github.com/GAIR-NLP/DeepResearcher): Scaling Deep Research via Reinforcement Learning in Real-world Environments. [![[code]](https://img.shields.io/github/stars/GAIR-NLP/DeepResearcher)](https://github.com/GAIR-NLP/DeepResearcher)
-- [Multimodal-Search-R1](https://github.com/EvolvingLMMs-Lab/multimodal-search-r1): Incentivizing LMMs to Search. [![[code]](https://img.shields.io/github/stars/EvolvingLMMs-Lab/multimodal-search-r1)](https://github.com/EvolvingLMMs-Lab/multimodal-search-r1)
-- [OTC](https://arxiv.org/pdf/2504.14870): Optimal Tool Calls via Reinforcement Learning.
-- [ZeroSearch](https://github.com/Alibaba-NLP/ZeroSearch): Incentivize the Search Capability of LLMs without Searching. [![[code]](https://img.shields.io/github/stars/Alibaba-NLP/ZeroSearch)](https://github.com/Alibaba-NLP/ZeroSearch)
-- [IKEA](https://github.com/hzy312/knowledge-r1): Reinforced Internal-External Knowledge Synergistic Reasoning for Efficient Adaptive Search Agent. [![[code]](https://img.shields.io/github/stars/hzy312/knowledge-r1)](https://github.com/hzy312/knowledge-r1)
-- [Scent of Knowledge](https://arxiv.org/abs/2505.09316): Optimizing Search-Enhanced Reasoning with Information Foraging.
-- [AutoRefine](https://www.arxiv.org/pdf/2505.11277): Search and Refine During Think. [![[code]](https://img.shields.io/github/stars/syr-cn/AutoRefine)](https://github.com/syr-cn/AutoRefine)
-- [O^2-Searcher](https://arxiv.org/pdf/2505.16582): A Searching-based Agent Model for Open-Domain Open-Ended Question Answering. [![[code]](https://img.shields.io/github/stars/Acade-Mate/O2-Searcher)](https://github.com/Acade-Mate/O2-Searcher)
-- [MaskSearch](https://arxiv.org/pdf/2505.20285): A Universal Pre-Training Framework to Enhance Agentic Search Capability. [![[code]](https://img.shields.io/github/stars/Alibaba-NLP/MaskSearch)](https://github.com/Alibaba-NLP/MaskSearch)
-- [VRAG-RL](https://arxiv.org/abs/2505.22019): Vision-Perception-Based RAG for Visually Rich Information Understanding. [![[code]](https://img.shields.io/github/stars/Alibaba-NLP/VRAG)](https://github.com/Alibaba-NLP/VRAG)
-- [R1-Code-Interpreter](https://arxiv.org/abs/2505.21668): Training LLMs to Reason with Code via SFT and RL. [![[code]](https://img.shields.io/github/stars/yongchao98/R1-Code-Interpreter)](https://github.com/yongchao98/R1-Code-Interpreter)
-- [R-Search](https://arxiv.org/abs/2506.04185): Empowering LLM Reasoning with Search via Multi-Reward Reinforcement Learning. [![[code]](https://img.shields.io/github/stars/QingFei1/R-Search)](https://github.com/QingFei1/R-Search)
-- [StepSearch](https://arxiv.org/pdf/2505.15107): Igniting LLMs Search Ability via Step-Wise Proximal Policy Optimization. [![[code]](https://img.shields.io/github/stars/Zillwang/StepSearch)](https://github.com/Zillwang/StepSearch)
-- [SimpleTIR](https://simpletir.notion.site/report): Stable End-to-End Reinforcement Learning for Multi-Turn Tool-Integrated Reasoning. [![[code]](https://img.shields.io/github/stars/ltzheng/SimpleTIR)](https://github.com/ltzheng/SimpleTIR)
-- [Router-R1](https://arxiv.org/pdf/2506.09033): Teaching LLMs Multi-Round Routing and Aggregation via Reinforcement Learning. [![[code]](https://img.shields.io/github/stars/ulab-uiuc/Router-R1)](https://github.com/ulab-uiuc/Router-R1)
-- [SkyRL](https://skyrl.readthedocs.io/en/latest/): A Modular Full-stack RL Library for LLMs. [![[code]](https://img.shields.io/github/stars/NovaSky-AI/SkyRL)](https://github.com/NovaSky-AI/SkyRL)
-- [ASearcher](https://arxiv.org/abs/2508.07976): Large-Scale RL for Search Agents. [![[code]](https://img.shields.io/github/stars/inclusionAI/ASearcher)](https://github.com/inclusionAI/ASearcher)
-- [ParallelSearch](https://www.arxiv.org/abs/2508.09303): Decompose Query and Search Sub-queries in Parallel with RL. [![[code]](https://img.shields.io/github/stars/Tree-Shu-Zhao/ParallelSearch)](https://github.com/Tree-Shu-Zhao/ParallelSearch)
-- [AutoTIR](https://arxiv.org/pdf/2507.21836): Autonomous Tools Integrated Reasoning via Reinforcement Learning. [![[code]](https://img.shields.io/github/stars/weiyifan1023/AutoTIR)](https://github.com/weiyifan1023/AutoTIR)
-- [verl-tool](https://arxiv.org/pdf/2509.01055): A version of verl to support diverse tool use. [![[code]](https://img.shields.io/github/stars/TIGER-AI-Lab/verl-tool)](https://github.com/TIGER-AI-Lab/verl-tool)
-- [Tree-GRPO](https://arxiv.org/abs/2509.21240): Tree Search for LLM Agent Reinforcement Learning. [![[code]](https://img.shields.io/github/stars/AMAP-ML/Tree-GRPO)](https://github.com/AMAP-ML/Tree-GRPO)
-- [EviNote-RAG](https://arxiv.org/abs/2509.00877): Enhancing RAG Models via Answer-Supportive Evidence Notes. [![[code]](https://img.shields.io/github/stars/Da1yuqin/EviNoteRAG)](https://github.com/Da1yuqin/EviNoteRAG)
-- [GlobalRAG](https://arxiv.org/pdf/2510.20548v1): GlobalRAG: Enhancing Global Reasoning in Multi-hop Question Answering via Reinforcement Learning. [![[code]](https://img.shields.io/github/stars/CarnegieBin/GlobalRAG)](https://github.com/CarnegieBin/GlobalRAG)
-
-
-
-
-
-## Citations
-
-```bibtex
-@article{jin2025search,
-  title={Search-r1: Training llms to reason and leverage search engines with reinforcement learning},
-  author={Jin, Bowen and Zeng, Hansi and Yue, Zhenrui and Yoon, Jinsung and Arik, Sercan and Wang, Dong and Zamani, Hamed and Han, Jiawei},
-  journal={arXiv preprint arXiv:2503.09516},
-  year={2025}
-}
-```
-
-```bibtex
-@article{jin2025empirical,
-  title={An Empirical Study on Reinforcement Learning for Reasoning-Search Interleaved LLM Agents},
-  author={Jin, Bowen and Yoon, Jinsung and Kargupta, Priyanka and Arik, Sercan O and Han, Jiawei},
-  journal={arXiv preprint arXiv:2505.15117},
-  year={2025}
-}
-```
+- 当前项目不是产品级 Deep Research 系统，工具主要围绕搜索。
+- claim support 主要基于 snippet、词汇支持度和可选 judge，不等于人工事实核查。
+- v3 小规模 GRPO 有正向信号，但 saved32 checkpoint 在 held-out eval 上还没有证明稳定超过 MixClean200 SFT。
+- 对外表述时应强调“扩展 Search-R1 的引用可信训练”，不要夸大为“全面击败 Search-R1”。

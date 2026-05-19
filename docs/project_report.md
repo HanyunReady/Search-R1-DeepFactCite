@@ -53,7 +53,7 @@ Search-R1 工具环境负责搜索，DeepFactCite reward 负责判断引用是�
 | 早期 GRPO smoke | 工程链路能跑通，但 query 级 retrieval hit 不足以保证 claim support |
 | v2 one-citation | citation-aware reward 明显优于 outcome-only reward |
 | v3 prompt-fix | 显著改善 URL validity、citation precision、claim support，并降低 unsupported citation rate |
-| 4 GPU 保存训练 | 已有运行入口和部分运行记录，但最终结论必须等 checkpoint 评测完成后才能下 |
+| 4 GPU 保存训练 | saved32 checkpoint 已完成转换与评测，工程链路成立；held-out eval 暂未证明相对 MixClean200 SFT 稳定提效 |
 
 需要特别强调：
 
@@ -62,6 +62,89 @@ Search-R1 工具环境负责搜索，DeepFactCite reward 负责判断引用是�
 只有保存下来的 checkpoint 在答案/搜索防护评测和引用质量评测上都通过，
 才可以把一次 GRPO 训练提升为有效模型结果。
 ```
+
+### 0.1 Search-R1 先解决了什么
+
+Search-R1 的出发点是：大模型不是天生会用搜索引擎。你在 prompt 里告诉它“可以搜索”，它也可能搜错关键词、搜太多轮、读不到关键证据，或者明明需要搜索却直接凭记忆回答。
+
+Search-R1 把问答过程改造成一个可训练的工具交互轨迹：
+
+```text
+用户问题
+-> 模型在 <think> 里推理
+-> 模型用 <search> 生成搜索 query
+-> 检索环境把结果放进 <information>
+-> 模型阅读结果，继续搜索或给出 <answer>
+-> reward 根据最终答案和轨迹质量打分
+-> PPO/GRPO 等 RL 方法更新模型
+```
+
+和普通 RAG 的关键差别是：普通 RAG 的搜索通常由系统固定执行；Search-R1 让搜索 query、搜索轮次和何时停止都成为模型策略的一部分。模型不是只学“根据文档回答”，而是学习“什么时候查、查什么、查完怎么答”。
+
+Search-R1 论文和代码中最值得保留的思想有三点：
+
+| 思想 | 小白版理解 | 对本项目的意义 |
+|---|---|---|
+| 搜索是 action | 搜索不是预处理，而是模型自己做出的动作 | 本项目沿用 search/tool 轨迹 |
+| reward 看完整轨迹 | 好坏不只看单个 token，而看一次交互是否完成任务 | 本项目把引用质量也放进轨迹奖励 |
+| 检索器可替换 | 本地 BM25、稠密检索、在线搜索都可以接入 | 本项目补充了带 URL 的本地检索和评测服务 |
+
+因此，Search-R1 已经搭好了“会搜索的 RL 智能体”底座。
+
+### 0.2 本项目相比 Search-R1 改进了什么
+
+本项目的核心改进不是换一个检索器，也不是简单把回答写长，而是把 Search-R1 的训练目标从“搜索后答对”扩展为“搜索后答对，并且引用可信”。
+
+可以用一个例子理解：
+
+```text
+证据只说：Chauvet-Pont d'Arc Cave 有旧石器时代洞穴壁画。
+模型却回答：它是欧洲最早、保存最完整的史前艺术遗址之一 [source](URL)。
+```
+
+这里 URL 可能来自检索结果，所以 `url_validity` 是高的；但证据并不支持“最早、保存最完整”这些更强声明，所以 `claim_support` 是低的。Search-R1 风格的答案奖励未必能抓住这个问题，本项目的 DeepFactCite reward 会把它作为重点失败模式。
+
+本项目相对 Search-R1 的主要增量如下：
+
+| 增量 | 做了什么 | 解决的问题 |
+|---|---|---|
+| DeepFactCite prompt | 要求用 markdown citation `[短说明](URL)`，且 URL 必须来自当前检索 | 防止模型随手编链接 |
+| URL 保留检索器 | 检索返回的 snippet 中保留 `URL:` 字段 | 让引用可验证 |
+| DeepCiteFact 数据转换 | 构建 SFT/RL parquet 和 citation corpus | 让模型先学会搜索引用格式 |
+| strict / mix 数据过滤 | 按 URL validity、claim support、unsupported rate 过滤轨迹 | 减少坏引用样本污染 |
+| citation-aware reward | 同时奖励答案、搜索、格式、URL 真实性和 claim support | 防止“答案对但引用乱贴” |
+| hard cap 规则 | 对无 citation、裸 `[1]`、raw URL、fake URL、不支持引用设低分上限 | 让严重引用错误无法拿高分 |
+| one-citation GRPO 消融 | 对比 outcome-only 和 citation-aware 两种奖励 | 证明引用奖励本身是否有效 |
+| guardrail eval | 同时跑 Search-R1 BM25、ShortQA、DeepFactCite strict 评测 | 防止引用训练破坏原有问答/搜索能力 |
+
+最重要的变化可以压缩成一句话：
+
+```text
+Search-R1 训练模型“会查资料再答题”；
+本项目训练模型“查到资料后，只引用真实来源，并且引用要支撑旁边那句话”。
+```
+
+这也是本项目对外最稳妥的表述。除非在相同模型、相同检索器、相同数据、相同 prompt 和相同评测下完成严格复现，否则不要把项目说成“击败 Search-R1”。更准确的定位是：在 Search-R1 风格搜索智能体上，增加引用真实性和声明级支持优化。
+
+还需要说明一个容易被误解的点：本项目没有必要强行复现原始 Search-R1 的重型搜索库。原始 Search-R1 的论文设置通常围绕 Wikipedia 语料、E5 向量检索、FAISS / ANN、Pyserini / BM25 等完整开放域检索栈；本项目的核心问题是 citation faithfulness，检索库必须保留 URL、片段和可验证引用证据。两者的语料目标、检索器形态和基座模型都不同。
+
+| 对比项 | 原始 Search-R1 常见设置 | 本项目设置 | 为什么这样做 |
+|---|---|---|---|
+| 搜索库 | 面向 NQ/HotpotQA 等开放域 QA 的 Wikipedia / wiki-18 检索库 | DeepFactCite / ShortQA / 本地 BM25 guardrail / 带 URL 的 citation corpus | 引用训练必须知道 URL 是否来自当前 evidence |
+| 检索目标 | 让模型搜到能回答短事实问题的段落 | 让模型搜到能支撑具体 claim 的来源片段 | URL 真实不等于 claim 被支持 |
+| 基座模型 | 主要参考 Qwen2.5 / Llama3.2 系列结果 | 本项目主线是 Qwen3-8B | 不能把 backbone 差异误当成 reward 差异 |
+| 工程成本 | 大索引、向量库、检索服务、版本 pin 和资源依赖都较重 | 优先使用轻量、可审计、可复现的检索库 | 收窄变量，先验证引用 reward 是否有效 |
+| 评测口径 | 论文 benchmark 数字可作为背景参考 | 本地同环境 benchmark 是主要依据 | 相同检索器、prompt、数据和 evaluator 下的对比更干净 |
+
+因此，本项目的合理目标不是“完整复刻 Search-R1 检索栈”，而是：
+
+```text
+在不同搜索库和 Qwen3-8B 基模上，
+用较轻量但可审计的检索环境达到有竞争力的 benchmark 准确率，
+同时把 Search-R1 没有重点处理的引用真实性和 claim support 纳入训练目标。
+```
+
+当前本地 benchmark 已经能支撑这个定位：MixClean200 SFT 在 Search-R1 BM25 200 上达到 `answer_subem=0.490`、`search_success=1.000`，在 ShortQA32 上达到 `answer_subem=0.500`。这些数字不能拿来直接对比 Search-R1 论文表格，但说明在本项目受控环境里，答案/搜索准确率有竞争力，后续引用训练必须守住这条基线。
 
 ## 1. 项目概述
 
@@ -581,7 +664,7 @@ EXPERIMENT_NAME=dfc-mixclean200-v3-promptfix-onecite-20260518_4gpu_saved \
 bash scripts/deepfactcite/run_sglang_grpo_v3_promptfix_4gpu_saved.sh
 ```
 
-当前 4 GPU 保存型实验还需要在 checkpoint 产出后继续做评测，不能只根据 rollout 训练日志下最终结论。
+当前 4 GPU saved32 实验已经证明了保存、转换和评测链路可以闭环，但这不等于模型效果已经胜出。后续正式 GRPO 仍必须把 checkpoint 评测作为 gate，而不能只根据 rollout 训练日志下结论。
 
 ## 6. 评测与当前结果
 
@@ -716,20 +799,39 @@ v3 2 GPU 结果是 no-save 小规模诊断，不是最终模型 checkpoint 结�
 
 这说明 v3 在 4 GPU / rollout.n=4 设定下仍有可用信号。保存型训练的目标是产生可以评测的 actor checkpoint，而不是再做一次 smoke test。
 
-截至本文生成时，仓库中存在 4 GPU 保存型实验相关产物路径：
+saved32 运行已产出并评测过一个 actor checkpoint：
 
 ```text
 logs/dfc-mixclean200-v3-promptfix-onecite-20260519_4gpu_n4_saved32_bg2.log
 logs/grpo/rollouts/dfc-mixclean200-v3-promptfix-onecite-20260519_4gpu_n4_saved32_bg2/
 outputs/deepfactcite/grpo/dfc-mixclean200-v3-promptfix-onecite-20260519_4gpu_n4_saved32_bg2/
+outputs/deepfactcite/grpo/dfc-mixclean200-v3-promptfix-onecite-20260519_4gpu_n4_saved32_bg2_hf/
 ```
 
-该类运行必须完成后再检查：
+评测结论要谨慎：
 
-- 是否写出 final actor checkpoint。
-- checkpoint step 是否符合预期。
+| 评测 | MixClean200 SFT | GRPO saved32 | 结论 |
+|---|---:|---:|---|
+| Search-R1 BM25 200 `answer_subem` | 0.490 | 0.410 | GRPO 下降 |
+| ShortQA32 `total` | 0.4268 | 0.4319 | 小幅上升，幅度不足 |
+| ShortQA32 `answer_subem` | 0.5000 | 0.5000 | 持平 |
+| DeepFactCite strict47 `total` | 0.1416 | 0.1521 | 小幅上升 |
+| DeepFactCite strict47 `unsupported_citation_rate` | 0.8787 | 0.8918 | 仍然很高且略差 |
+
+因此，saved32 的正确定位是：
+
+```text
+保存型 GRPO、checkpoint 转换和三类评测 pipeline 已经跑通；
+但该 checkpoint 不能作为“GRPO 相比 MixClean200 SFT 明显提效”的最终结果。
+```
+
+下一轮保存型运行必须继续检查：
+
+- Search-R1 BM25 200 是否守住答案/搜索能力。
+- ShortQA32 是否不退化。
+- DeepFactCite Strict47 的 `claim_support` 是否实质上升。
+- `unsupported_citation_rate` 是否下降，而不是只提高 citation 数量。
 - rollout summary 是否保持 search、citation、support 指标。
-- checkpoint 在 ShortQA32、Search-R1 BM25 200、DeepFactCite Strict47 上表现如何。
 
 ## 7. 如何复现主要流程
 
@@ -997,9 +1099,9 @@ docs/deepfactcite_grpo_processes_interview_20260519.md
 
 下一步优先级：
 
-1. 等 4 GPU 保存型 GRPO 运行完成，并确认 final checkpoint 写出。
-2. 对保存 checkpoint 运行 ShortQA32、Search-R1 BM25 200、DeepFactCite Strict47 评测。
-3. 生成 checkpoint 级结果表，而不是只看 rollout 级训练指标。
+1. 保留 saved32 作为“保存、转换、评测链路已打通”的工程里程碑。
+2. 下一次 GRPO 先做 16/32 step checkpoint gate：Search-R1 BM25 200 不能明显低于 MixClean200，ShortQA32 不能退，DeepFactCite Strict47 的 `claim_support` 要实质上升。
+3. 继续使用本地同环境 benchmark 作为主要比较口径，不把不同搜索库、不同基模下的数字直接和 Search-R1 论文表格做胜负比较。
 4. 对比 SFT MixClean200、outcome-only GRPO、citation-aware GRPO。
 5. 抽样分析好样例和失败样例，尤其关注 unsupported citation。
 6. 如果 checkpoint 评测稳定，再扩大数据规模和训练步数。
@@ -1008,14 +1110,14 @@ docs/deepfactcite_grpo_processes_interview_20260519.md
 
 - 引入更强的 claim-level judge。
 - 扩大 one-citation 数据到多 citation、多句答案。
-- 用更好的检索器替代简单 lexical/offline corpus。
+- 在保持 URL 可验证和实验变量可控的前提下，逐步升级检索器；不盲目复刻重型 Search-R1 搜索库。
 - 增加 citation presence 的正向奖励，而不只是 hard cap。
 - 对中文问题和跨语言 evidence 做专门评测。
 - 将 runtime citation verifier 与训练 reward 统一。
 
 ## 12. 参考入口
 
-- Search-R1 原始 README：`README.md`
+- Search-R1 原始 README：`docs/english_originals/README.md`
 - veRL 原始说明：`VERL_README.md`
 - 本项目学习索引：`docs/deepfactcite_learning_index_20260518.md`
 - 实验主记录：`docs/deepfactcite_experiment_record_20260518.md`
