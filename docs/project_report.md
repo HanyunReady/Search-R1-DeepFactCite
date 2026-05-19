@@ -243,15 +243,44 @@ SFT 适合教模型：
 当前仓库主要覆盖以下范围：
 
 - DeepFactCite 数据转换。
+
+  仓库提供了把 DeepCiteFact / DeepFactCite 原始轨迹转换成 Search-R1 / verl 可消费数据的脚本，核心入口是 `scripts/deepfactcite/prepare_data.py`。它会读取原始 JSONL 轨迹，抽取 query、模型回答、搜索片段和候选答案，将 DeepCiteFact 中的 `<google_search>`、`<tool_response>` 等标签转换成本项目统一使用的 `<search>`、`<information>` 协议。同时，脚本会根据格式、搜索行为、引用数量、URL 有效性、claim support 和 unsupported citation rate 做 SFT 样本过滤，只保留相对干净的搜索/引用轨迹。输出结果包括 `sft/train.parquet`、`sft/test.parquet`、`rl/train.parquet`、`rl/test.parquet` 和用于本地检索的 `corpus.jsonl`，使后续 SFT、GRPO 和评测都能使用同一套数据入口。
+
 - DeepFactCite prompt 和工具协议。
+
+  仓库在 `deepfactcite/prompts.py` 中定义了 DeepFactCite 风格的系统提示和 Search-R1 兼容 prompt。协议要求模型先在 `<think>...</think>` 中推理，需要外部证据时输出 `<search>plain text query</search>`，环境把检索结果插入 `<information>...</information>`，最后用 `<answer>...</answer>` 给出答案。长答案还要求使用 markdown citation，例如 `[evidence summary](URL)`，其中 URL 必须来自当前轨迹检索返回的证据。这个协议的作用是把“推理、搜索、观察、引用、最终回答”拆成可解析的结构，为 reward 计算、rollout 诊断和 vLLM / SGLang 工具交互提供统一格式。
+
 - 轻量 lexical retriever。
+
+  仓库实现了不依赖在线搜索服务的轻量检索路径，主要用于本地开发、smoke test 和可复现实验。`deepfactcite/retriever_server.py` 和评测脚本中的 `LexicalRetriever` 可以直接基于本地 `corpus.jsonl` 做词法匹配；`scripts/deepfactcite/serve_searchr1_bm25.py` 则封装了 Pyserini / Lucene BM25 索引，并暴露 Search-R1 风格的 `/retrieve` API。它的目标不是替代生产级搜索引擎，而是在固定语料和固定 top-k 设置下稳定返回片段、URL 和分数，使模型生成的引用是否来自检索证据可以被严格检查。
+
 - DeepFactCite reward 和 diagnostics。
+
+  引用相关 reward 的核心在 `deepfactcite/reward.py`。它会解析模型输出中的 `<answer>`、`<search>`、`<information>` 和 markdown citation，计算格式正确性、是否搜索、答案 subEM、引用 URL 是否来自检索证据、citation precision、claim support、unsupported citation rate、fake URL rate、citation count 等指标。`compute_score` 将这些指标按权重合成训练 reward，`explain_score` 则输出更细的诊断字段，方便定位失败原因。`scripts/deepfactcite/verl_deepfactcite_reward.py` 把这套 reward 接到本地 VERL / SGLang GRPO 训练流程中，并在训练时保存 rollout 轨迹和指标，支持后续复盘。
+
 - Qwen3 LoRA SFT 启动脚本。
+
+  仓库提供了面向 Qwen3-4B / Qwen3-8B 的 LoRA SFT 启动脚本，例如 `scripts/deepfactcite/train_sft_qwen3.sh` 和 `scripts/deepfactcite/launch_mix_clean_sft_200.sh`。脚本会检查 SFT parquet 数据是否存在，校验 Qwen3 所需的 `transformers` 版本，设置 FSDP SFT trainer、LoRA rank、target modules、batch size、sequence length、学习率、输出目录和日志方式。它的作用是先用监督轨迹教会模型基本搜索、引用和 `<answer>` 格式，为后续 GRPO 提供一个不会完全随机探索的初始化模型。
+
 - LoRA merge 工具。
+
+  `scripts/deepfactcite/merge_lora_adapter.py` 用于把 PEFT LoRA adapter 合并回基础模型，生成 vLLM 或 GRPO actor 更容易直接加载的完整权重目录。工具支持指定 base model、adapter、输出目录、加载 dtype 和保存 dtype，并会保存 tokenizer。报告中需要强调的是：merge 不是新的训练阶段，而是部署和评测前的权重整理步骤；它用于减少 serving 时动态加载 adapter 的不确定性，也便于在相同 vLLM 路径下比较 base、SFT 和 GRPO checkpoint。
+
 - vLLM 评测脚本。
+
+  仓库提供了基于 vLLM OpenAI-compatible completion API 的 agentic evaluation 脚本，例如 `scripts/deepfactcite/eval_citation_agent_vllm.py` 和 `scripts/deepfactcite/eval_searchr1_agent_vllm.py`。评测脚本会加载 parquet 数据和 tokenizer，向 vLLM 服务请求生成；当模型输出 `<search>...</search>` 时，脚本调用本地 retriever，把结果拼成 `<information>...</information>` 追加回上下文，直到模型输出 `<answer>` 或达到最大轮数。每条样本都会保存 prompt、rollout、ground truth 和 reward diagnostics，最后聚合生成 JSON 报告。这个评测路径用于同时检查 answer/search 防护指标和 DeepFactCite 引用质量指标。
+
 - SGLang GRPO 训练 wrapper。
+
+  仓库中包含多组 SGLang / Search-R1 风格 GRPO 启动 wrapper，例如 `scripts/deepfactcite/run_sglang_grpo_ablation_2gpu.sh`、`run_sglang_grpo_v3_promptfix_2gpu_saved.sh` 和 `run_sglang_grpo_v3_promptfix_4gpu_saved.sh`。这些脚本主要负责固定实验配置：数据目录、GPU 数量、tensor parallel size、GRPO 采样数 `n`、batch size、response length、prompt length、搜索 top-k、checkpoint 保存频率、reward 模式和 dry-run 默认值。它们本身不是训练算法实现，而是把本仓库的数据、prompt、retriever、reward 和上游 SGLang/VERL 训练入口可靠地拼接起来，降低重复实验时配置漂移的风险。
+
 - rollout summary 生成器。
+
+  `scripts/deepfactcite/summarize_grpo_rollouts.py` 用于读取训练过程中保存的 `rollout_data_step_*.jsonl`，聚合 reward、format、search、URL validity、claim support、unsupported citation rate、citation count 等指标，并按 step 输出趋势表。它还会统计失败原因，例如 no_search、no_citation、invalid_or_fake_url、weak_claim_support、unsupported_citation，并抽取低分样本作为人工排查入口。这个工具解决的是“训练日志数字太粗，无法解释模型为什么失败”的问题，使每次 GRPO run 都能沉淀成可读的 Markdown 诊断报告。
+
 - 多份实验记录、失败台账和运行计划。
+
+  `docs/` 和 `reports/` 下保存了本项目不同阶段的实验记录、评测摘要、失败分析、复现问题、存储清理建议和后续运行计划。例如 `docs/deepfactcite_experiment_record_20260518.md` 记录了阶段目标、当前约束、SFT baseline 和 GRPO 消融问题；`docs/deepfactcite_reproducibility_issue_log.md` 记录可复现性风险；`reports/*rollout_summary.md` 和 `reports/*eval_summary.md` 保存具体实验输出。这些文档的作用不是装饰性总结，而是约束后续实验决策：哪些结果可以作为基线，哪些失败已经出现过，哪些结论还不能扩大表述。
 
 当前不应夸大的范围：
 
