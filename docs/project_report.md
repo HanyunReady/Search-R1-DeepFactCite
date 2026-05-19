@@ -126,13 +126,13 @@ Search-R1 训练模型“会查资料再答题”；
 
 这也是本项目对外最稳妥的表述。除非在相同模型、相同检索器、相同数据、相同 prompt 和相同评测下完成严格复现，否则不要把项目说成“击败 Search-R1”。更准确的定位是：在 Search-R1 风格搜索智能体上，增加引用真实性和声明级支持优化。
 
-还需要说明一个容易被误解的点：本项目没有必要强行复现原始 Search-R1 的重型搜索库。原始 Search-R1 的论文设置通常围绕 Wikipedia 语料、E5 向量检索、FAISS / ANN、Pyserini / BM25 等完整开放域检索栈；本项目的核心问题是 citation faithfulness，检索库必须保留 URL、片段和可验证引用证据。两者的语料目标、检索器形态和基座模型都不同。
+还需要说明一个容易被误解的点：本项目没有必要强行复现原始 Search-R1 的重型搜索库。原始 Search-R1 论文和脚本主要围绕 `Qwen2.5-3B/7B`、`Llama3.2-3B` 等基模，以及 Wikipedia / `wiki-18` 开放域语料；本项目主线是 `Qwen3-8B-Base`，检索库必须保留 URL、片段和可验证引用证据。两者的语料目标、检索器形态和基座模型都不同。
 
 | 对比项 | 原始 Search-R1 常见设置 | 本项目设置 | 为什么这样做 |
 |---|---|---|---|
-| 搜索库 | 面向 NQ/HotpotQA 等开放域 QA 的 Wikipedia / wiki-18 检索库 | DeepFactCite / ShortQA / 本地 BM25 guardrail / 带 URL 的 citation corpus | 引用训练必须知道 URL 是否来自当前 evidence |
+| 搜索库 | 面向 NQ/HotpotQA 等开放域 QA 的 Wikipedia / `wiki-18`；本地 `wiki_dump.jsonl` 约 `21,015,324` 条、`19G`，BM25 索引约 `2.2G`，也可接 E5 向量索引 | DeepFactCite citation corpus：基础版 `6,118` 条、strict 版 `4,766` 条、v3 one-citation GRPO 受控集 `32` 条；另用 `wiki-18` BM25 只做答案/搜索防护评测 | 引用训练必须知道 URL 是否来自当前 evidence |
 | 检索目标 | 让模型搜到能回答短事实问题的段落 | 让模型搜到能支撑具体 claim 的来源片段 | URL 真实不等于 claim 被支持 |
-| 基座模型 | 主要参考 Qwen2.5 / Llama3.2 系列结果 | 本项目主线是 Qwen3-8B | 不能把 backbone 差异误当成 reward 差异 |
+| 基座模型 | 主要参考 `Qwen2.5-3B/7B`、`Llama3.2-3B` 系列结果 | 本项目主线是 `Qwen3-8B-Base`，`Qwen3-4B-Base` 仅作快速实验目标 | 不能把 backbone 差异误当成 reward 差异 |
 | 工程成本 | 大索引、向量库、检索服务、版本 pin 和资源依赖都较重 | 优先使用轻量、可审计、可复现的检索库 | 收窄变量，先验证引用 reward 是否有效 |
 | 评测口径 | 论文 benchmark 数字可作为背景参考 | 本地同环境 benchmark 是主要依据 | 相同检索器、prompt、数据和 evaluator 下的对比更干净 |
 

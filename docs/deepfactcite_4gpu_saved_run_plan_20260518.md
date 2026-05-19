@@ -19,6 +19,8 @@
 
 下一轮训练的目标不是再做一次 smoke test，而是保存一个可以用答案/搜索指标和引用指标共同评测的 checkpoint。
 
+这次 4-GPU 计划默认使用 `Qwen3-8B-Base` 和 v3 one-citation DeepFactCite 受控语料。它不是在 4 张卡上复刻原始 Search-R1 的 `Qwen2.5/Llama3.2 + wiki-18/E5` 大检索栈；后者本地 `wiki-18` 语料约 `21,015,324` 条、`19G`，BM25 索引约 `2.2G`，变量更多。这里先用 32 条带 URL 的窄 claim corpus 验证 citation-aware reward 是否真的改善引用行为。
+
 ## 已准备的入口
 
 参数化基础启动脚本：

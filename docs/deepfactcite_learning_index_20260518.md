@@ -4,6 +4,27 @@
 
 这是从零理解当前 DeepFactCite/Search-R1 实验的推荐阅读顺序。建议按这个顺序读文件，不要一开始就直接跳到脚本或原始日志。
 
+## 0. 先读项目入口
+
+从这里开始：
+
+```text
+README.md
+docs/project_report.md
+```
+
+先确认三件事：
+
+- 原始 Search-R1 常见基模是 `Qwen2.5-3B/7B`、`Llama3.2-3B`；本项目主线是 `Qwen3-8B-Base`。
+- 原始 Search-R1 常用 `wiki-18` / Wikipedia 检索库，本地约 `21,015,324` 条、`19G`；本项目 DeepFactCite 主线语料只有几千条，但保留 URL 和 citation evidence。
+- 本项目 benchmark 是本地同环境对比，不直接和 Search-R1 论文表格做胜负比较。
+
+入门检查点：
+
+```text
+如果你能解释为什么“大搜索库不一定更适合引用可信训练”，再继续读实验记录。
+```
+
 ## 1. 主线故事
 
 从这里开始：

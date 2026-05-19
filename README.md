@@ -46,8 +46,11 @@ URL 真实，也不代表它支撑了 URL 前面的那句话。
 
 - 不能简单宣称“击败 Search-R1”。
 - 更准确的说法是：本项目在 Search-R1 风格搜索智能体上增加了引用真实性和声明级支持训练。
-- 本项目的搜索库、检索器和基座模型都不同于原始 Search-R1，因此评测应按“本地同环境 benchmark”理解，而不是和论文表格做直接因果比较。
-- 没有必要为了本项目强行复现 Search-R1 的重型搜索库；那套 E5 / Wikipedia / ANN 或 BM25 工程栈复现成本高、变量多，换到 Qwen3 和引用任务后效果也不一定更好。
+- 原始 Search-R1 的主线结果主要围绕 `Qwen2.5-3B/7B` 和 `Llama3.2-3B`；本项目主线是 `Qwen3-8B-Base`，另保留 `Qwen3-4B-Base` 作为快速实验目标。
+- 原始 Search-R1 的典型搜索库是 2018 Wikipedia / `wiki-18`：本地 `wiki_dump.jsonl` 约 `21,015,324` 条、`19G`，BM25 索引约 `2.2G`，也可接 E5 向量索引。它适合开放域短问答，但不天然保存“哪个 URL 支撑答案里的哪句话”。
+- 本项目主线搜索库来自 DeepCiteFact/DeepFactCite：`data/deepfactcite/corpus.jsonl` 有 `6,118` 条、`19M`，strict 版有 `4,766` 条、`16M`，v3 one-citation GRPO 受控集只有 `32` 条。它小得多，但每条都保留 URL 和 citation evidence，更适合训练引用可信。
+- 因为搜索库、检索器和基座模型都不同，本文档里的结果按“本地同环境 benchmark”理解，不和 Search-R1 论文表格做直接因果比较。
+- 没有必要为了本项目强行照搬 Search-R1 的重型 E5 / Wikipedia / ANN / BM25 工程栈；复现成本高、变量多，换到 Qwen3 和引用任务后不一定提升 claim support。
 - 已跑通 Qwen3-8B SFT、Search-R1 风格 BM25 防护评测、DeepFactCite 引用评测、SGLang/veRL GRPO 路径。
 - 在当前本地 benchmark 上，MixClean200 SFT 已达到有竞争力的准确率：Search-R1 BM25 200 的 `answer_subem=0.490`、`search_success=1.000`，ShortQA32 的 `answer_subem=0.500`。
 - 4 GPU saved GRPO 的工程链路已经成立，但当前 saved32 checkpoint 还不能作为最终效果提升结论。
@@ -91,15 +94,17 @@ Search-R1 论文中强调：只是在推理时 prompt 模型“你可以用搜�
 
 ### 为什么本项目没有照搬 Search-R1 的重型搜索库
 
-原始 Search-R1 常见设置依赖较完整的开放域检索栈，例如 Wikipedia 语料、E5 向量索引、FAISS / ANN、Pyserini / BM25，以及对应的检索服务。这个路线适合复现论文里的开放域 QA，但对本项目不一定是最优投入。
+原始 Search-R1 常见设置依赖较完整的开放域检索栈。以本仓库已经准备过的 `wiki-18` BM25 防护评测为例，`data/wiki-18-corpus/wiki_dump.jsonl` 约 `21,015,324` 条、`19G`，`data/wiki-18-bm25-index` 约 `2.2G`；如果走原论文常用的 E5 dense retrieval，还要额外下载和加载向量索引。这个路线适合复现 NQ/HotpotQA 这类开放域短问答，但对 DeepFactCite 引用任务不一定是最优投入。
 
-原因有三点：
+差异可以这样看：
 
-| 原因 | 说明 |
-|---|---|
-| 搜索库不一样 | 本项目要验证的是 DeepFactCite 引用可信，语料必须保留 URL 和 citation evidence；原 Search-R1 的检索库主要服务 NQ/HotpotQA 答案命中 |
-| 基模不一样 | 原始 Search-R1 结果主要基于 Qwen2.5 / Llama3.2，本项目主线是 Qwen3-8B，不能把模型差异混进结论 |
-| 复现成本高 | 大规模索引、检索环境、版本 pin、GPU/CPU 资源都会引入额外变量，投入很重，但不保证提升 citation support |
+| 对比项 | 原始 Search-R1 常见设置 | 本项目主线设置 |
+|---|---|---|
+| 基座模型 | `Qwen2.5-3B/7B`、`Llama3.2-3B` 等 | `Qwen3-8B-Base` 为主，`Qwen3-4B-Base` 用于快速实验 |
+| 训练问题 | NQ/HotpotQA 风格短事实问答 | DeepFactCite 长答案、引用和 claim support |
+| 搜索库 | 2018 Wikipedia / `wiki-18`，本地约 `21.0M` 段、`19G`，另有 BM25/E5 索引 | DeepFactCite citation corpus：基础版 `6,118` 条，strict 版 `4,766` 条，v3 GRPO 受控集 `32` 条 |
+| 检索目标 | 找到能回答问题的段落 | 找到能支撑某个具体 claim 的 URL 片段 |
+| 复现成本 | 需要大语料、大索引、检索服务和版本 pin | 轻量词汇检索即可复现实验主线，重点检查 URL 和 claim |
 
 因此本项目采用更可控的策略：
 

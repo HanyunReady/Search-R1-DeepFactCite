@@ -6,6 +6,16 @@
 - DeepFactCite 增加了长答案引用提示、SFT 数据转换、轻量级词汇检索器，以及面向“引用可信”的 GRPO 奖励。
 - Qwen3-4B 是快速 MVP 目标；Qwen3-8B 是更适合面试展示的强版本目标。
 
+先明确对比口径：
+
+| 项 | 原始 Search-R1 常见设置 | 本项目设置 |
+|---|---|---|
+| 基座模型 | `Qwen2.5-3B/7B`、`Llama3.2-3B` 等 | `Qwen3-8B-Base` 为主，`Qwen3-4B-Base` 作快速实验 |
+| 搜索库 | 2018 Wikipedia / `wiki-18`，本地 `wiki_dump.jsonl` 约 `21,015,324` 条、`19G`，BM25 索引约 `2.2G`，也可接 E5 向量索引 | DeepFactCite citation corpus：基础版 `6,118` 条、strict 版 `4,766` 条，v3 one-citation GRPO 受控集 `32` 条 |
+| 目标 | 提升开放域短问答答案命中率 | 保住答案/搜索能力，同时提升 URL 真实性和 claim support |
+
+所以本项目没有强行照搬 Search-R1 的重型搜索库。大规模 Wikipedia/E5/ANN/BM25 栈复现成本高，变量多；换到 Qwen3 和引用任务后，不一定比轻量、带 URL、可审计的 citation corpus 更能提升引用可信度。
+
 ## 资源规划
 
 推荐的稳定资源配置：
@@ -89,7 +99,7 @@ python scripts/deepfactcite/prepare_agentic_eval_data.py \
 
 ## 检索器
 
-对于小型 DeepFactCite 语料库，使用轻量级词汇检索服务：
+对于 DeepFactCite 主线训练，使用轻量级词汇检索服务。它不是为了复刻 Search-R1 论文的 E5/Wikipedia 检索，而是为了让每条返回证据都能保留 `URL:`，方便 reward 检查 citation 是否来自当前搜索轨迹。
 
 ```bash
 conda activate searchr1
@@ -99,6 +109,15 @@ CORPUS=data/deepfactcite/corpus.jsonl PORT=8000 \
 ```
 
 这个服务实现了 Search-R1 的 `/retrieve` API，并返回包含 `contents`、`url` 和 `score` 的文档。
+
+当前常用语料规模：
+
+| 语料 | 行数 | 用途 |
+|---|---:|---|
+| `data/deepfactcite/corpus.jsonl` | 6,118 | 基础 SFT/RL 引用语料 |
+| `data/deepfactcite_strict/corpus.jsonl` | 4,766 | 更严格过滤后的引用评测/训练语料 |
+| `data/deepfactcite_sglang_grpo_claim_filtered_v3_promptfix_onecite/corpus.jsonl` | 32 | v3 one-citation GRPO 受控消融 |
+| `data/wiki-18-corpus/wiki_dump.jsonl` | 21,015,324 | 仅作为 Search-R1 BM25 200 答案/搜索防护评测语料 |
 
 ## SFT
 

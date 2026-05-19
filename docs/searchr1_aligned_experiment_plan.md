@@ -30,6 +30,16 @@ SFT 阶段失败了什么，为什么失败，你如何证明根因，
 
 DeepFactCite 在 Search-R1 风格搜索智能体目标上扩展了 URL 真实性和声明支持奖励，在保持答案/搜索性能的同时，提升引用有效性和引用支持性。
 
+本项目的比较口径是“本地同环境 benchmark”，不是 Search-R1 论文表格的直接复现：
+
+| 项 | 原始 Search-R1 参考 | 本项目 |
+|---|---|---|
+| 基座模型 | 论文和脚本主要参考 `Qwen2.5-3B/7B`、`Llama3.2-3B` | 主线是 `Qwen3-8B-Base`，4B 只作快速实验 |
+| 搜索库 | 2018 Wikipedia / `wiki-18`，本地 `wiki_dump.jsonl` 约 `21,015,324` 条、`19G`，BM25 索引约 `2.2G`；原论文还常用 E5 dense retrieval | DeepFactCite 基础语料 `6,118` 条，strict 语料 `4,766` 条，v3 one-citation GRPO 语料 `32` 条；它们保留 URL 和 citation evidence |
+| 主要目标 | 开放域短问答 EM | 答案/搜索不退化，同时提升 URL validity、claim support、unsupported citation rate |
+
+因此，不需要为了本项目强行照搬 Search-R1 的重型检索库。那会引入大语料、大索引、检索服务和版本 pin 等变量，而且换到 Qwen3 与引用任务后不一定更好。`wiki-18` BM25 仍可作为答案/搜索防护评测，但 DeepFactCite 主线训练应优先使用轻量、可审计、带 URL 的 citation corpus。
+
 ## 外部 Search-R1 参考
 
 以下内容只能作为参考点，不能作为主要因果 baseline：
@@ -47,7 +57,7 @@ jiulaikankan/Qwen3-4B-Thinking-Search-R1-baseline：
   可用于 sanity check，但不足以作为主要 8B baseline。
 ```
 
-公平的 8B 对比仍然应该是：相同 backbone、相同检索器、相同 prompt/data，只改变 reward 目标：
+公平的 8B 对比仍然应该是：相同 Qwen3-8B backbone、相同本地检索器、相同 prompt/data，只改变 reward 目标：
 outcome-only/Search-R1-style 对比 citation-aware DeepFactCite。
 
 ## 原始 Search-R1 结果参考

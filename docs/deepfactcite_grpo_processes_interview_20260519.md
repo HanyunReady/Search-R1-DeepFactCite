@@ -10,6 +10,8 @@
 - Ray、FSDP、SGLang、多轮 search agent 和 reward 是怎么串起来的；
 - 如何用通俗但技术可信的方式讲清楚这套系统。
 
+先说明实验口径：这次训练不是复刻原始 Search-R1 的重型 `wiki-18` / E5 检索栈。原始 Search-R1 常见基模是 `Qwen2.5-3B/7B`、`Llama3.2-3B`，`wiki-18` 本地语料约 `21,015,324` 条、`19G`；本项目使用 `Qwen3-8B-Base`，主线训练用带 URL 的 DeepFactCite citation corpus。这样做是为了把变量收窄到“搜索后引用是否可信”，而不是把大索引复现、模型差异和 citation reward 混在一起。
+
 ## 1. 结论先行
 
 这不是 8 个彼此独立的训练进程，而是 4 个训练 worker 加 1 个 4-way tensor parallel 的 SGLang rollout 服务。
